@@ -1,25 +1,59 @@
 # Docker Save Registry Proxy
 
-یک proxy سازگار با Docker Registry v2 که ایمیج را از خروجی `docker save` سرویس زیر می‌گیرد، manifest و blobهای قابل pull می‌سازد و به Docker client تحویل می‌دهد:
+A Docker Registry v2-compatible proxy that retrieves images from the output of the `docker save` service, generates pullable manifests and blobs, and serves them to Docker clients.
+
+## How It Works
+
+The proxy acts as a bridge between Docker clients and the `dockerimagesave.akiel.dev` service:
+
+```text
+Docker Client
+     │
+     │ docker pull
+     ▼
+Docker Save Registry Proxy
+     │
+     │ fetch docker save archive
+     ▼
+dockerimagesave.akiel.dev
+```
+
+The upstream service can be queried directly:
 
 ```bash
 wget -q -O - "https://dockerimagesave.akiel.dev/image?name=<image-registry>/<image-repository>/<image-name>:tag"
 ```
 
-## اجرا
+The proxy converts the resulting Docker image archive into a Docker Registry v2-compatible structure, including manifests and blobs.
+
+## Getting Started
+
+### Install and Run
 
 ```bash
 npm install
 npm start
 ```
 
-اگر Docker Desktop استفاده می‌کنید، proxy را داخل Docker بالا بیاورید تا `localhost:5000` از دید Docker daemon هم به همین registry برسد:
+By default, the application listens on port `5000`.
+
+You can then pull an image through the proxy:
+
+```bash
+docker pull localhost:5000/library/nginx:latest
+```
+
+### Docker Compose
+
+If you are using Docker Desktop, it is recommended to run the proxy inside Docker so that the registry is accessible to the Docker daemon:
 
 ```bash
 docker compose up --build
 ```
 
-تنظیمات پیش‌فرض داخل `.env` قرار دارد:
+## Configuration
+
+Default configuration is provided in `.env`:
 
 ```env
 APP_URL=localhost
@@ -30,67 +64,164 @@ LOG_LEVEL=debug
 UPSTREAM_TIMEOUT_MS=120000
 ```
 
-پیش‌فرض روی پورت `5000` بالا می‌آید:
+### Environment Variables
+
+| Variable              | Default                                   | Description                                                |
+| --------------------- | ----------------------------------------- | ---------------------------------------------------------- |
+| `APP_URL`             | `localhost`                               | Public host or domain of the application, without the port |
+| `APP_PORT`            | `5000`                                    | HTTP port. If not set, `PORT` is used                      |
+| `PORT`                | `5000`                                    | Fallback HTTP port                                         |
+| `HOST`                | `::`                                      | Address the HTTP server listens on                         |
+| `CACHE_DIR`           | `./data/cache`                            | Directory used to cache blobs and manifests                |
+| `SAVE_IMAGE_URL`      | `https://dockerimagesave.akiel.dev/image` | Upstream service that generates the `docker save` archive  |
+| `CACHE_TTL_SECONDS`   | `3600`                                    | How long tags remain fresh. `0` disables cache expiration  |
+| `DEFAULT_REGISTRY`    | `docker.io`                               | Default registry for shortened image references            |
+| `LOG_LEVEL`           | `debug`                                   | Log level: `debug`, `info`, `warn`, or `error`             |
+| `UPSTREAM_TIMEOUT_MS` | `120000`                                  | Timeout for requests to the upstream image service         |
+
+## Pulling Images
+
+The proxy supports standard Docker Registry v2 image references.
+
+### Full Reference
 
 ```bash
 docker pull localhost:5000/library/nginx:latest
 ```
 
-برای official imageهای Docker Hub می‌توانید کوتاه‌تر هم pull بزنید:
+### Short Reference
+
+For official Docker Hub images, you can omit `docker.io`:
 
 ```bash
 docker pull localhost:5000/nginx:latest
 ```
 
-در این حالت ایمیج local دقیقا با همان reference دستور pull دیده می‌شود:
+The application uses:
 
-```bash
-docker images
-# localhost:5000/nginx   latest
+```env
+DEFAULT_REGISTRY=docker.io
 ```
 
-## نام تمیزتر در docker images
+to resolve the registry behind the scenes.
 
-Docker نام ایمیج local را از خود دستور `docker pull` می‌سازد و registry نمی‌تواند بخشی از path را بعد از pull حذف کند. اگر می‌خواهید خروجی به شکل زیر باشد:
-
-```bash
-docker images
-# localhost:5000/library/nginx   latest
-```
-
-اپ را با registry پیش‌فرض اجرا کنید و موقع pull دیگر `docker.io` را در path نگذارید:
+For example:
 
 ```bash
 docker pull localhost:5000/library/nginx:latest
 ```
 
-اپ در پشت صحنه همچنان این آدرس را از سرویس upstream می‌گیرد:
+is resolved upstream as:
 
 ```text
 https://dockerimagesave.akiel.dev/image?name=docker.io/library/nginx:latest
 ```
 
-## تنظیمات
+## Image Names
 
-| Env | Default | توضیح |
-| --- | --- | --- |
-| `APP_URL` | `localhost` | host یا domain public اپ، بدون port |
-| `APP_PORT` | `5000` | پورت HTTP. اگر نبود، `PORT` خوانده می‌شود |
-| `PORT` | `5000` | fallback پورت HTTP |
-| `HOST` | `::` در `.env` | آدرس listen. برای `localhost` بهتر است IPv6 هم فعال باشد |
-| `CACHE_DIR` | `./data/cache` | محل cache blob و manifest |
-| `SAVE_IMAGE_URL` | `https://dockerimagesave.akiel.dev/image` | سرویس تولید docker save tar |
-| `CACHE_TTL_SECONDS` | `3600` | مدت fresh بودن tagها. مقدار `0` یعنی cache دائمی |
-| `DEFAULT_REGISTRY` | `docker.io` در `.env` | registry پیش‌فرض برای pullهای کوتاه‌تر مثل `localhost:5000/library/nginx:latest` |
-| `LOG_LEVEL` | `debug` در `.env` | سطح لاگ: `debug`, `info`, `warn`, `error` |
-| `UPSTREAM_TIMEOUT_MS` | `120000` | timeout درخواست به سرویس `dockerimagesave.akiel.dev` |
+Docker determines the local image name from the reference used in the `docker pull` command.
 
-## Deploy پشت HTTPS
+For example:
 
-Docker برای registryهای remote معمولا HTTPS می‌خواهد. برای production اپ را پشت Nginx/Caddy/Traefik با TLS قرار بدهید و بعد pull بزنید:
+```bash
+docker pull localhost:5000/nginx:latest
+```
+
+will result in:
+
+```bash
+docker images
+```
+
+```text
+REPOSITORY           TAG
+localhost:5000/nginx latest
+```
+
+If you want the `library` namespace to remain part of the local image name, pull using the full path:
+
+```bash
+docker pull localhost:5000/library/nginx:latest
+```
+
+The result will be:
+
+```text
+REPOSITORY                    TAG
+localhost:5000/library/nginx latest
+```
+
+The registry cannot remove or modify this path after the image has been pulled because Docker derives the local repository name from the pull reference.
+
+## Cache
+
+The proxy supports local caching for manifests and blobs.
+
+By default:
+
+```env
+CACHE_DIR=./data/cache
+CACHE_TTL_SECONDS=3600
+```
+
+Tags remain fresh for one hour.
+
+To make the cache permanent:
+
+```env
+CACHE_TTL_SECONDS=0
+```
+
+Cached data is stored under:
+
+```text
+./data/cache
+```
+
+## Production Deployment
+
+Docker generally requires HTTPS when communicating with remote registries.
+
+For production deployments, place the proxy behind a reverse proxy such as:
+
+* Nginx
+* Caddy
+* Traefik
+
+and configure TLS.
+
+Once deployed, you can pull images using your registry domain:
 
 ```bash
 docker pull registry.example.com/docker.io/library/nginx:latest
 ```
 
-برای تست local با HTTP روی Docker Desktop، اجرای مستقیم با `npm start` ممکن است از دید Docker daemon پشت `localhost` دیده نشود. در این حالت یا از `docker compose up --build` استفاده کنید، یا `host.docker.internal:5000` را به `insecure-registries` Docker اضافه کنید. برای دامنه یا IP بدون HTTPS باید آن را در Docker daemon به عنوان `insecure-registries` تنظیم کنید.
+## Local HTTP with Docker Desktop
+
+When running the proxy directly with:
+
+```bash
+npm start
+```
+
+the Docker daemon may not be able to access the service through `localhost`.
+
+You can instead run the proxy using:
+
+```bash
+docker compose up --build
+```
+
+Alternatively, you can configure Docker Desktop to allow an insecure registry such as:
+
+```text
+host.docker.internal:5000
+```
+
+For a custom domain or IP address served over HTTP, the address must also be configured as an `insecure-registries` entry in the Docker daemon configuration.
+
+> **Note:** Insecure registries should generally only be used for local development or trusted private networks. Production registries should use HTTPS.
+
+## License
+
+Add your project license here.
