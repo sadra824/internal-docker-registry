@@ -4,7 +4,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production \
     APP_PORT=5000 \
-    HOST=::
+    HOST=0.0.0.0
 
 COPY package*.json ./
 RUN npm ci --omit=dev

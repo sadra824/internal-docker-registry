@@ -34,6 +34,7 @@ const store = new ImageStore({
 });
 
 async function main() {
+  console.log(process.env);
   await store.init();
 
   const server = http.createServer((req, res) => {
@@ -104,6 +105,7 @@ async function main() {
 }
 
 async function handleRequest(req, res, requestId) {
+
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
   if (url.pathname === '/healthz') {
