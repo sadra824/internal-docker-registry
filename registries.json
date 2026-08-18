@@ -1,0 +1,15 @@
+[
+    "docker.arvancloud.ir",
+    "docker.io",
+    "ghcr.io",
+    "registry.k8s.io",
+    "quay.io",
+    "gcr.io",
+    "public.ecr.aws",
+    "mcr.microsoft.com",
+    "registry.gitlab.com",
+    "nvcr.io",
+    "registry.hub.docker.com",
+    "icr.io",
+    "registry.cn-hangzhou.aliyuncs.com"
+]
