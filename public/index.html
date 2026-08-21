@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="رجیستری صدهانت — پروکسی کش سبک برای Docker Registry API نسخه 2">
-    <title>رجیستری صدهانت — پروکسی کش برای Docker Registry v2</title>
+    <meta name="description" content="رجیستری اختصاصی صدهانت — مرجع کامل ایمیج‌های داکر با پشتیبانی Docker Registry API نسخه 2">
+    <title>رجیستری اختصاصی صدهانت — Docker Registry v2</title>
     <link rel="icon" type="image/svg+xml" href="logo.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -49,13 +49,13 @@
                     <p class="eyebrow">
                         <span class="pulse-dot" aria-hidden="true"></span>
                         <span dir="ltr">Docker Registry API v2</span>
-                        · کش pull-through
                     </p>
-                    <h1>میرور اختصاصی داکر، با <span class="accent">کشِ محلی</span> که هر pull سریع‌تر می‌شود</h1>
+                    <h1>رجیستری <span class="accent">اختصاصی صدهانت</span> — کامل، سریع و همیشه در دسترس</h1>
                     <p class="lede">
-                        یک پروکسی سبک که بین <code>docker pull</code> و رجیستری‌های عمومی قرار می‌گیرد.
-                        اولین pull ایمیج را از طریق سرویس منبع دریافت و تبدیل می‌کند —
-                        بقیه pullها از کش سرو می‌شوند؛ با تأخیر کم و بدون مصرف دوباره پهنای‌باند.
+                        مرجع کامل ایمیج‌های داکر برای زیرساخت شما؛ هر ایمیج از هر رجیستری عمومی،
+                        دریافت و با همان پروتکل استاندارد Registry v2 سرو می‌شود.
+                        با فعال‌کردن کش، ایمیج‌های پرکاربرد با تأخیر کم و بدون مصرف دوباره پهنای‌باند
+                        در دسترس هستند.
                     </p>
                     <div class="hero-actions">
                         <a class="btn btn-primary" href="#quick-start">
@@ -79,7 +79,7 @@
                         </div>
                         <div>
                             <dt>کش اختیاری</dt>
-                            <dd>پیش‌فرض خاموش؛ با متغیر <code>CACHE_ENABLED</code> فعال می‌شود</dd>
+                            <dd>قابل فعال‌سازی برای استقرار self-host</dd>
                         </div>
                     </dl>
                 </div>
@@ -92,7 +92,7 @@
                         <span class="terminal-title" dir="ltr">docker — bash</span>
                     </div>
                     <pre class="terminal-body" id="hero-terminal" tabindex="0"
-                        aria-label="دموی ترمینال: دریافت nginx از طریق پروکسی. اولین pull دانلود و تبدیل می‌شود؛ pull دوم از کش سرو می‌شود."><code><span class="t-prompt">$</span> <span class="t-cmd" id="type-target">docker pull registry.sadhanet.com/library/nginx:latest</span>
+                        aria-label="دموی ترمینال: دریافت nginx از طریق رجیستری. اولین pull دانلود و تبدیل می‌شود؛ pull دوم از کش سرو می‌شود."><code><span class="t-prompt">$</span> <span class="t-cmd" id="type-target">docker pull registry.sadhanet.com/library/nginx:latest</span>
 <span class="t-dim">latest: Pulling from library/nginx</span>
 <span class="t-dim">a8e4797c4b53: Pull complete</span>
 <span class="t-dim">6e2ca3bab02: Pull complete</span>
@@ -111,7 +111,7 @@
             <div class="container">
                 <div class="section-head">
                     <h2>نحوه کار</h2>
-                    <p>هر <code>docker pull</code> از طریق پروکسی این مسیر را طی می‌کند. برای دیدن حرکت درخواست، دکمه
+                    <p>هر <code>docker pull</code> این مسیر را طی می‌کند. برای دیدن حرکت درخواست، دکمه
                         شبیه‌سازی را بزنید.</p>
                 </div>
 
@@ -137,7 +137,7 @@
                             <span class="step-no" aria-hidden="true">۱</span>
                             <div class="step-body">
                                 <h3>کلاینت داکر</h3>
-                                <p><code>docker pull registry.sadhanet.com/library/nginx:latest</code> — پروکسی همان
+                                <p><code>docker pull registry.sadhanet.com/library/nginx:latest</code> — رجیستری همان
                                     پروتکل
                                     استاندارد Registry v2 را صحبت می‌کند؛ پس کلاینت نیازی به تغییر ندارد.</p>
                             </div>
@@ -173,7 +173,7 @@
                                     <span class="step-no" aria-hidden="true">۳</span>
                                     <div class="step-body">
                                         <h3>دریافت از طریق سرویس منبع</h3>
-                                        <p>پروکسی همه رجیستری‌های پیکربندی‌شده را به‌صورت موازی از طریق
+                                        <p>سرویس همه رجیستری‌های پیکربندی‌شده را به‌صورت موازی از طریق
                                             <code>dockerimagesave.akiel.dev</code> امتحان می‌کند — اولین جواب برنده است.
                                         </p>
                                     </div>
@@ -210,7 +210,7 @@
             <div class="container">
                 <div class="section-head">
                     <h2>امکانات</h2>
-                    <p>هر چیزی که از یک میرور رجیستری کوچک و self-hosted انتظار دارید.</p>
+                    <p>هر چیزی که از یک رجیستری اختصاصی کامل انتظار دارید.</p>
                 </div>
                 <ul class="feature-grid">
                     <li class="feature-card">
@@ -305,7 +305,7 @@ cd internal-docker-registry
 npm install
 npm start             <span class="c-dim"># روی پورت :5000 بالا می‌آید</span>
 
-<span class="c-dim"># دریافت هر ایمیج عمومی از طریق پروکسی:</span>
+<span class="c-dim"># دریافت هر ایمیج عمومی از طریق رجیستری:</span>
 docker pull localhost:5000/library/nginx:latest</code></pre>
                     </div>
                     <div class="code-card">
