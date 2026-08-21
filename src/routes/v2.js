@@ -1,7 +1,11 @@
 /**
- * Docker Registry API v2 — روتر مستقل از runtime.
+ * Docker Registry API v2 — کاملاً استریمی، بدون ذخیره‌سازی.
  * یک تابع خالص: (request) => Promise<Response | null>
  * null یعنی «این مسیر مال من نیست» (برای 404 سطح بالا).
+ *
+ * نکته‌ی مهم برای سرعت: پاسخ blob قبل از رسیدن داده‌ی سرویس منبع شروع
+ * می‌شود (هدرها فوراً می‌روند و بدنه استریم می‌شود) — یعنی تایم‌اوتِ
+ * «awaiting response headers» کلاینت داکر هرگز فعال نمی‌شود.
  */
 
 import { createRegistryService } from '../services/registry.js';
@@ -17,14 +21,9 @@ function jsonError(status, code, message) {
 }
 
 export function createV2Router(deps) {
-    const { store, cacheEnabled } = deps;
-
     const registry = createRegistryService({
-        store,
         getRegistries: deps.getRegistries,
-        fetchTarball: deps.fetchTarball,
-        os: deps.os,
-        arch: deps.arch
+        fetchTarball: deps.fetchTarball
     });
 
     async function handleManifest(req, pathname, method) {
@@ -35,11 +34,11 @@ export function createV2Router(deps) {
         const reference = decodeURIComponent(match[2]);
 
         try {
-            const { bytes, mediaType } = await registry.resolveManifest(name, reference);
-            const digest = await sha256Digest(bytes);
+            const entry = await registry.resolveManifest(name, reference);
+            const digest = entry.manifestDigest;
 
             const headers = {
-                'Content-Type': mediaType,
+                'Content-Type': entry.mediaType,
                 'Docker-Content-Digest': digest,
                 ...V2_API_HEADER
             };
@@ -47,11 +46,14 @@ export function createV2Router(deps) {
             if (method === 'HEAD') {
                 return new Response(null, {
                     status: 200,
-                    headers: { ...headers, 'Content-Length': String(bytes.length) }
+                    headers: {
+                        ...headers,
+                        'Content-Length': String(entry.manifestBytes.length)
+                    }
                 });
             }
 
-            return new Response(bytes, { status: 200, headers });
+            return new Response(entry.manifestBytes, { status: 200, headers });
         } catch (err) {
             return jsonError(404, 'MANIFEST_UNKNOWN', err.message);
         }
@@ -61,27 +63,58 @@ export function createV2Router(deps) {
         const match = pathname.match(/^(.+)\/blobs\/(sha256:[a-f0-9]{64})$/);
         if (!match) return null;
 
+        const name = decodeURIComponent(match[1].replace(/^\//, ''));
         const digest = match[2];
-        const blob = await store.getBlob(digest);
 
-        if (!blob) {
-            return jsonError(404, 'BLOB_UNKNOWN', digest);
+        try {
+            const blob = await registry.openBlob(name, digest);
+
+            if (!blob) {
+                return jsonError(404, 'BLOB_UNKNOWN', digest);
+            }
+
+            const headers = {
+                'Content-Type': 'application/octet-stream',
+                'Docker-Content-Digest': digest,
+                'Content-Length': String(blob.size),
+                ...V2_API_HEADER
+            };
+
+            // هدرها فوراً می‌روند؛ بدنه همان‌طور که از سرویس منبع
+            // می‌رسد استریم می‌شود — بدون ذخیره و بدون پردازش.
+            return new Response(blob.stream, { status: 200, headers });
+        } catch (err) {
+            return jsonError(404, 'BLOB_UNKNOWN', err.message);
         }
+    }
 
-        const headers = {
-            'Content-Type': 'application/octet-stream',
-            'Docker-Content-Digest': digest,
-            ...V2_API_HEADER
-        };
+    async function headBlob(req, pathname) {
+        const match = pathname.match(/^(.+)\/blobs\/(sha256:[a-f0-9]{64})$/);
+        if (!match) return null;
 
-        if (method === 'HEAD') {
+        const name = decodeURIComponent(match[1].replace(/^\//, ''));
+        const digest = match[2];
+
+        // برای حجم بلاب فقط باید هدرِ عضو tar پیدا شود — داده خوانده نمی‌شود
+        try {
+            const blob = await registry.openBlob(name, digest);
+            if (!blob) {
+                return jsonError(404, 'BLOB_UNKNOWN', digest);
+            }
+            blob.stream.cancel();
+
             return new Response(null, {
                 status: 200,
-                headers: { ...headers, 'Content-Length': String(blob.size) }
+                headers: {
+                    'Content-Type': 'application/octet-stream',
+                    'Docker-Content-Digest': digest,
+                    'Content-Length': String(blob.size),
+                    ...V2_API_HEADER
+                }
             });
+        } catch (err) {
+            return jsonError(404, 'BLOB_UNKNOWN', err.message);
         }
-
-        return new Response(blob.stream, { status: 200, headers });
     }
 
     return async function v2Router(request) {
@@ -106,12 +139,15 @@ export function createV2Router(deps) {
             );
         }
 
+        // بدون ذخیره‌سازی، فهرست تگ دائمی نداریم
         if (pathname.endsWith('/tags/list') && method === 'GET') {
             const name = pathname.slice(0, -'/tags/list'.length).replace(/^\//, '');
-            const tags = cacheEnabled
-                ? await store.listTags(name)
-                : []; // در حالت بدون کش دائمی، فهرست تگ دائمی نداریم
-            return Response.json({ name, tags }, { headers: V2_API_HEADER });
+            return Response.json({ name, tags: [] }, { headers: V2_API_HEADER });
+        }
+
+        if (method === 'HEAD' && /\/blobs\/sha256:/.test(pathname)) {
+            const headRes = await headBlob(request, pathname);
+            if (headRes) return headRes;
         }
 
         if (method === 'GET' || method === 'HEAD') {

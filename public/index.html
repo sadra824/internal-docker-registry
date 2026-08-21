@@ -54,8 +54,8 @@
                     <p class="lede">
                         مرجع کامل ایمیج‌های داکر برای زیرساخت شما؛ هر ایمیج از هر رجیستری عمومی —
                         برای عبور از محدودیت رجیستری‌های خارجی، بدون واسطه و بدون دردسر.
-                        فایل ایمیج بدون ذخیره‌سازی و پردازش اضافه، مستقیماً به کلاینت استریم می‌شود
-                        و با یک دستور <code>docker load</code> بارگذاری می‌شود.
+                        فایل ایمیج بدون ذخیره‌سازی و پردازش اضافه مستقیماً استریم می‌شود:
+                        هم با <code>docker pull</code> استاندارد، هم با یک دستور <code>docker load</code>.
                     </p>
                     <div class="hero-actions">
                         <a class="btn btn-primary" href="#quick-start">
@@ -92,9 +92,11 @@
                         <span class="terminal-title" dir="ltr">docker — bash</span>
                     </div>
                     <pre class="terminal-body" id="hero-terminal" tabindex="0"
-                        aria-label="دموی ترمینال: دریافت ایمیج nginx از طریق سرویس و بارگذاری مستقیم با docker load؛ روش دوم دانلود با قابلیت ادامه."><code><span class="t-prompt">$</span> <span class="t-cmd" id="type-target">wget -q -O - "https://registry.sadhanet.com/image?name=nginx:latest" | docker load</span>
-<span class="t-dim">استریم مستقیم تاربال از رجیستری برنده…</span>
-<span class="t-ok">Loaded image: nginx:latest ✓</span>
+                        aria-label="دموی ترمینال: دریافت nginx با docker pull مستقیم از رجیستری؛ روش دوم دانلود ادامه‌پذیر با wget و بارگذاری با docker load."><code><span class="t-prompt">$</span> <span class="t-cmd" id="type-target">docker pull registry.sadhanet.com/library/nginx:latest</span>
+<span class="t-dim">latest: Pulling from library/nginx</span>
+<span class="t-dim">a8e4797c4b53: Pull complete</span>
+<span class="t-dim">6e2ca3bab02: Pull complete</span>
+<span class="t-ok">Status: Downloaded newer image ✓</span>
 
 <span class="t-prompt">$</span> <span class="t-cmd">wget -c --content-disposition "https://registry.sadhanet.com/image?name=redis:7"</span>
 <span class="t-dim">redis_7.tar  100%[==================&gt;]  118.20M  9.8MB/s</span>
@@ -129,8 +131,9 @@
                             <span class="step-no" aria-hidden="true">۱</span>
                             <div class="step-body">
                                 <h3>درخواست دانلود</h3>
-                                <p><code>GET /image?name=nginx:latest</code> — با wget یا curl؛ خروجی مستقیماً به
-                                    <code>docker load</code> pipe می‌شود یا با <code>wget -c</code> ذخیره و ادامه‌پذیر است.</p>
+                                <p><code>docker pull</code> مستقیم یا <code>GET /image?name=nginx:latest</code> —
+                                    خروجی /image مستقیماً به <code>docker load</code> pipe می‌شود یا با
+                                    <code>wget -c</code> ذخیره و ادامه‌پذیر است.</p>
                             </div>
                         </li>
                         <li class="flow-step" data-step="2">
@@ -184,6 +187,16 @@
                         <h3>استریم مستقیم</h3>
                         <p>هیچ ذخیره‌سازی و پردازشی روی سرور انجام نمی‌شود؛ تاربال ایمیج مستقیماً از منبع به
                             کلاینت پاس می‌شود و مصرف منابع تقریباً صفر است.</p>
+                    </li>
+                    <li class="feature-card">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M22 12.5c0 2.4-4.5 4.3-10 4.3S2 14.9 2 12.5V9h20v3.5Z" />
+                            <path d="M22 9c0 2-4.5 3.7-10 3.7S2 11 2 9s4.5-3.7 10-3.7S22 7 22 9Z" />
+                        </svg>
+                        <h3>docker pull مستقیم</h3>
+                        <p>کلاینت‌های سازگار با Registry v2 — docker ،podman و Kubernetes — بدون هیچ تغییری
+                            مستقیماً از همین آدرس pull می‌کنند؛ منیفست در لحظه و بدون پردازش سنگین ساخته می‌شود.</p>
                     </li>
                     <li class="feature-card">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -336,7 +349,7 @@ curl "https://registry.sadhanet.com/platforms?name=nginx:latest"</code></pre>
                             </tr>
                             <tr>
                                 <td><code>/v2/…</code></td>
-                                <td>API سازگار با Registry v2 نیز موجود است (برای ایمیج‌های بزرگ به CPU بیشتر نیاز دارد)</td>
+                                <td>API کاملِ سازگار با Registry v2 برای <code>docker pull</code> مستقیم — استریمی و بدون ذخیره‌سازی</td>
                             </tr>
                         </tbody>
                     </table>

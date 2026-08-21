@@ -57,7 +57,14 @@ export async function fetchTarball(imageRef, options = {}) {
         || 'https://dockerimagesave.akiel.dev/image';
     const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
 
-    const url = `${sourceBaseUrl}?name=${encodeURIComponent(imageRef)}`;
+    const params = new URLSearchParams({ name: imageRef });
+
+    // انتخاب پلتفرم — طبق API سرویس منبع (پیش‌فرض خودش linux/amd64 است)
+    if (options.os) params.set('os', options.os);
+    if (options.arch) params.set('arch', options.arch);
+    if (options.variant) params.set('variant', options.variant);
+
+    const url = `${sourceBaseUrl}?${params.toString()}`;
 
     let res;
     try {

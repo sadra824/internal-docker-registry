@@ -6,47 +6,19 @@
     "compatibility_date": "2025-09-01",
 
     // لندینگ پیج (پوشه public) به‌صورت Static Assets سرو می‌شود —
-    // بدون express.static؛ فایل‌های موجود را خود پلتفرم می‌دهد و بقیه درخواست‌ها به Worker می‌رسد.
+    // فایل‌های موجود را خود پلتفرم می‌دهد و بقیه درخواست‌ها به Worker می‌رسد.
     "assets": {
         "directory": "./public"
     },
 
-    // نکته‌ی CPU: مسیر پیش‌فرض دانلود (GET /image) کاملاً pass-through است و
-    // تقریباً هیچ CPU مصرف نمی‌کند؛ بنابراین روی پلن رایگان هم کار می‌کند.
-    // فقط مسیر /v2 (تبدیل کامل به Registry API) برای ایمیج‌های بزرگ به CPU
-    // بیشتری نیاز دارد و مناسب پلن رایگان نیست.
-
     // متغیرهای محیطی (env.X — نه process.env)
     "vars": {
-        // کش به‌طور پیش‌فرض خاموش است؛ در این حالت فقط از یک کش موقتِ
-        // best-effort روی لبه (Cache API با TTL محدود) استفاده می‌شود.
-        "CACHE_ENABLED": "false",
-
         "SOURCE_BASE_URL": "https://dockerimagesave.akiel.dev/image",
         "DEFAULT_PLATFORM_OS": "linux",
-        "DEFAULT_PLATFORM_ARCH": "amd64",
-
-        // TTL کش موقت لبه بر حسب ثانیه (معادل حالت transient نسخه Node: ۳۰ دقیقه)
-        "TRANSIENT_TTL_SECONDS": "1800",
-
-        // فقط وقتی CACHE_ENABLED=true است معنا دارد (حداکثر حجم bucket برای Cron cleanup)
-        "CACHE_MAX_SIZE": "0"
+        "DEFAULT_PLATFORM_ARCH": "amd64"
     }
 
-    // ─── فعال‌کردن کش دائمی (R2) ───
-    // ۱) یک bucket بسازید:  npx wrangler r2 bucket create registry-cache
-    // ۲) بخش زیر را از حالت کامنت خارج کنید:
-    //
-    // "r2_buckets": [
-    //     {
-    //         "binding": "REGISTRY_BUCKET",
-    //         "bucket_name": "registry-cache"
-    //     }
-    // ],
-    //
-    // ۳) برای پاک‌سازی دوره‌ای وقتی CACHE_MAX_SIZE > 0 است، Cron Trigger اضافه کنید:
-    //
-    // "triggers": {
-    //     "crons": ["0 3 * * *"]
-    // }
+    // نکته: این سرویس هیچ داده‌ای ذخیره نمی‌کند؛ نه کش، نه R2، نه Cron.
+    // همه‌چیز استریمی پاس داده می‌شود و فقط متادیتای کوچک در حافظه‌ی
+    // isolate (تا ۱۰ دقیقه) نگه داشته می‌شود.
 }
