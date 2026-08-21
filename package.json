@@ -1,5 +1,5 @@
 {
-    "name": "docker-registry-proxy",
+    "name": "sadhanet-registry",
     "version": "2.0.0",
     "description": "Docker Registry API v2 compatible pull-through cache proxy — runs on Cloudflare Workers",
     "type": "module",

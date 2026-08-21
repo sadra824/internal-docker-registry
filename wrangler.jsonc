@@ -1,7 +1,7 @@
 {
     // تنظیمات Cloudflare Workers — npx wrangler dev / npx wrangler deploy
     "$schema": "node_modules/wrangler/config-schema.json",
-    "name": "internal-docker-registry",
+    "name": "sadhanet-registry",
     "main": "src/index.js",
     "compatibility_date": "2025-09-01",
 
