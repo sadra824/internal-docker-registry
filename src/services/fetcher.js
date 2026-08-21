@@ -8,7 +8,9 @@
  * مانند کاری که نسخه Node با zlib می‌کرد.
  */
 
-const DEFAULT_TIMEOUT_MS = 60000;
+// دانلود کامل یک tarball از سرویس منبع ممکن است برای ایمیج‌های بزرگ
+// بیش از یک دقیقه طول بکشد؛ تایم‌اوت پیش‌فرض را ۲ دقیقه می‌گذاریم.
+const DEFAULT_TIMEOUT_MS = 120000;
 
 async function peekAndUnwrap(body) {
     const reader = body.getReader();

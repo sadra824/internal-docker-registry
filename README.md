@@ -141,7 +141,7 @@ All settings come from Worker environment variables (Vars in `wrangler.jsonc`, o
 2. **Cache lookup** – The proxy checks the active store (edge cache by default, R2 when enabled) for the manifest digest (by tag or digest reference).
    - If **cached**, it is served immediately.
    - If **not cached**, the proxy fetches from upstream.
-3. **Fetching** – Every configured upstream registry is tried **in parallel** via `SOURCE_BASE_URL?name=<registry>/<image>:<tag>`; the first success wins (duplicate concurrent pulls are deduplicated per isolate).
+3. **Fetching** – Every configured upstream registry is tried **in order, one at a time** via `SOURCE_BASE_URL?name=<registry>/<image>:<tag>`; the first success wins (duplicate concurrent pulls are deduplicated per isolate).
 4. **Streaming conversion** – The downloaded tarball is parsed as a stream:
    - **OCI layout** (modern `docker save`): blobs are already content-addressed; large blobs stream directly into storage, only small JSON metadata is buffered. For multi-arch images, blobs of other platforms are pruned after platform selection.
    - **Classic `docker save`**: layers are gzipped and hashed in memory (capped at ~96 MB total).

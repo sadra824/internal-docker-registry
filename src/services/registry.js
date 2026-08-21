@@ -4,12 +4,11 @@
  * resolveManifest(name, reference):
  *   ۱) جست‌وجوی مستقیم با digest
  *   ۲) جست‌وجوی tag از store
- *   ۳) دریافت از رجیستری‌های بالادستی از طریق سرویس منبع
- *      (همه به‌صورت موازی؛ اولین موفق برنده است — مثل Promise.any نسخه Node)
- *
- * جلوگیری از دانلود همزمان و تکراری: نقشه‌ی pending در سطح isolate
- * مشترک است (به‌جای transientStores نسخه Node — حالت موقت حالا در
- * خود store با TTL مدیریت می‌شود).
+ *   ۳) دریافت از رجیستری‌های بالادستی از طریق سرویس منبع —
+ *      به‌ترتیب و یکی‌یکی (اولین موفق برنده است).
+ *      تلاش موازی روی Worker یعنی دانلود همزمانِ چند برابرِ ایمیج،
+ *      CPU و پهنای‌باند بیشتر و پاسخ دیرتر؛ برای محیط request-driven
+ *      مناسب نیست.
  */
 
 import { convertTarStream } from './converter.js';
@@ -67,21 +66,23 @@ export function createRegistryService({
         if (!pending.has(key)) {
             const job = (async () => {
                 const registries = getRegistries();
-                const attempts = registries.map(
-                    (registry) => attemptRegistry(registry, name, reference)
-                );
+                const failures = [];
 
-                let winner;
-                try {
-                    winner = await Promise.any(attempts);
-                } catch (aggregateErr) {
-                    const details = (aggregateErr.errors || [aggregateErr])
-                        .map((e) => e.message)
-                        .join('\n');
+                // به‌ترتیب: اولین رجیستری موفق برنده است
+                let winner = null;
+                for (const registry of registries) {
+                    try {
+                        winner = await attemptRegistry(registry, name, reference);
+                        break;
+                    } catch (err) {
+                        failures.push(err.message);
+                    }
+                }
 
+                if (!winner) {
                     throw new Error(
                         `ایمیج "${name}:${reference}" در هیچ‌کدام از رجیستری‌های ` +
-                        `پیکربندی (REGISTRIES_JSON) پیدا نشد:\n${details}`
+                        `پیکربندی (REGISTRIES_JSON) پیدا نشد:\n${failures.join('\n')}`
                     );
                 }
 
