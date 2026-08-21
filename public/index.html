@@ -49,14 +49,13 @@
                     <p class="eyebrow">
                         <span class="pulse-dot" aria-hidden="true"></span>
                         <span dir="ltr">Docker Registry API v2</span>
-                        · روی Cloudflare Workers
+                        · کش pull-through
                     </p>
-                    <h1>میرور اختصاصی داکر، با <span class="accent">کشِ لبه</span> که هر pull سریع‌تر می‌شود</h1>
+                    <h1>میرور اختصاصی داکر، با <span class="accent">کشِ محلی</span> که هر pull سریع‌تر می‌شود</h1>
                     <p class="lede">
-                        یک پروکسی سبک که بین <code>docker pull</code> و رجیستری‌های عمومی قرار می‌گیرد و روی لبه‌ی
-                        کلاودفلر اجرا می‌شود.
+                        یک پروکسی سبک که بین <code>docker pull</code> و رجیستری‌های عمومی قرار می‌گیرد.
                         اولین pull ایمیج را از طریق سرویس منبع دریافت و تبدیل می‌کند —
-                        pullهای بعدی از کشِ لبه (یا R2، در صورت فعال‌سازی) سریع سرو می‌شوند.
+                        بقیه pullها از کش سرو می‌شوند؛ با تأخیر کم و بدون مصرف دوباره پهنای‌باند.
                     </p>
                     <div class="hero-actions">
                         <a class="btn btn-primary" href="#quick-start">
@@ -80,7 +79,7 @@
                         </div>
                         <div>
                             <dt>کش اختیاری</dt>
-                            <dd>پیش‌فرض خاموش؛ کش موقت لبه یا R2 دائمی</dd>
+                            <dd>پیش‌فرض خاموش؛ با متغیر <code>CACHE_ENABLED</code> فعال می‌شود</dd>
                         </div>
                     </dl>
                 </div>
@@ -101,7 +100,7 @@
 <span class="t-ok">Status: Downloaded newer image ✓</span>
 
 <span class="t-prompt">$</span> <span class="t-cmd">docker pull registry.sadhanet.com/library/nginx:latest</span>
-<span class="t-dim">[cache] manifest + blobs served from edge cache</span>
+<span class="t-dim">[cache] manifest + blobs served from cache</span>
 <span class="t-ok">Status: Image is up to date ✓ (much faster)</span></code></pre>
                 </div>
             </div>
@@ -147,7 +146,7 @@
                             <span class="step-no" aria-hidden="true">۲</span>
                             <div class="step-body">
                                 <h3>بررسی کش</h3>
-                                <p>جست‌وجوی منیفست و blobها در کش — موقتِ لبه (پیش‌فرض) یا R2 دائمی — با کلید
+                                <p>جست‌وجوی منیفست و blobها در کش (در صورت فعال بودن)، با کلید
                                     digestهای <code>sha256</code> و به‌صورت content-addressed.
                                 </p>
                             </div>
@@ -161,7 +160,7 @@
                                     <span class="step-no" aria-hidden="true">۳</span>
                                     <div class="step-body">
                                         <h3>سرو از کش</h3>
-                                        <p>منیفست و لایه‌ها مستقیم از کشِ لبه استریم می‌شوند — بدون ترافیک خارجی،
+                                        <p>منیفست و لایه‌ها مستقیم از کش استریم می‌شوند — بدون ترافیک خارجی،
                                             با تأخیر در حد شبکه محلی.</p>
                                     </div>
                                 </li>
@@ -183,8 +182,8 @@
                                     <span class="step-no" aria-hidden="true">۴</span>
                                     <div class="step-body">
                                         <h3>تبدیل و ذخیره</h3>
-                                        <p>tarball به‌صورت استریمی پردازش می‌شود و به blobها و منیفست‌های
-                                            content-addressed تبدیل و در کش نوشته می‌شود — بدون fs و بدون دیسک.</p>
+                                        <p>tarball مربوط به <code>docker save</code> باز می‌شود، به blobها و
+                                            منیفست‌های content-addressed تبدیل و در کش نوشته می‌شود.</p>
                                     </div>
                                 </li>
                                 <li class="flow-step" data-step="5c">
@@ -198,8 +197,9 @@
                             </ol>
                         </div>
                     </div>
-                    <p class="flow-note">کش خودش را تمیز می‌کند: کش موقتِ لبه با TTL (پیش‌فرض ۳۰ دقیقه) منقضی می‌شود و در
-                        حالت R2، Cron Trigger حجم را زیر <code>CACHE_MAX_SIZE</code> نگه می‌دارد.
+                    <p class="flow-note">کش به‌طور پیش‌فرض خاموش است؛ در این حالت داده‌های موقت بعد از ۳۰ دقیقه به‌صورت
+                        خودکار منقضی می‌شوند و با فعال‌کردن کش، پاک‌سازی دوره‌ای حجم را زیر
+                        <code>CACHE_MAX_SIZE</code> نگه می‌دارد.
                     </p>
                 </div>
             </div>
@@ -229,10 +229,10 @@
                             <circle cx="12" cy="12" r="9" />
                             <path d="M12 7v5l3 3" />
                         </svg>
-                        <h3>کش اختیاری: لبه یا R2</h3>
-                        <p>کش به‌طور پیش‌فرض خاموش است؛ در این حالت فقط کش موقتِ best-effort روی لبه استفاده می‌شود.
-                            با <code>CACHE_ENABLED=true</code> بلاب‌ها به‌صورت دائمی و S3-compatible در <code>R2</code>
-                            ذخیره می‌شوند.
+                        <h3>کش اختیاری</h3>
+                        <p>کش به‌طور پیش‌فرض خاموش است و داده‌های موقت بعد از ۳۰ دقیقه خودکار حذف می‌شوند.
+                            با <code>CACHE_ENABLED=true</code> بلاب‌ها و منیفست‌ها به‌صورت دائمی و
+                            content-addressed ذخیره می‌شوند.
                         </p>
                     </li>
                     <li class="feature-card">
@@ -271,9 +271,9 @@
                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" />
                         </svg>
-                        <h3>Serverless روی Workers</h3>
-                        <p>بدون سرور دائمی و بدون مدیریت زیرساخت؛ هر درخواست روی لبه‌ی کلاودفلر اجرا می‌شود و کش موقت
-                            به‌صورت خودکار بعد از ۳۰ دقیقه بی‌فعالیت منقضی می‌شود.</p>
+                        <h3>سبک و کم‌نیاز</h3>
+                        <p>با حداقل منابع و بدون وابستگی‌های سنگین اجرا می‌شود؛ راه‌اندازی کامل با یک دستور و بدون
+                            تنظیمات پیچیده.</p>
                     </li>
                 </ul>
             </div>
@@ -284,14 +284,14 @@
             <div class="container">
                 <div class="section-head">
                     <h2>شروع سریع</h2>
-                    <p>در کمتر از یک دقیقه بالا می‌آید — با wrangler یا دیپلوی روی Cloudflare.</p>
+                    <p>در کمتر از یک دقیقه بالا می‌آید.</p>
                 </div>
                 <div class="qs-grid">
                     <div class="code-card">
                         <div class="code-head">
-                            <span>اجرای محلی</span>
+                            <span>راه‌اندازی (Self-host)</span>
                             <button type="button" class="copy-btn"
-                                data-copy="npm install&#10;npx wrangler dev">
+                                data-copy="git clone https://github.com/sadra824/internal-docker-registry.git&#10;cd internal-docker-registry&#10;npm install&#10;npm start">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="icon-sm">
                                     <rect x="9" y="9" width="12" height="12" rx="2" />
@@ -300,17 +300,19 @@
                                 کپی
                             </button>
                         </div>
-<pre class="code-body"><code>npm install
-npx wrangler dev
+<pre class="code-body"><code>git clone https://github.com/sadra824/internal-docker-registry.git
+cd internal-docker-registry
+npm install
+npm start             <span class="c-dim"># روی پورت :5000 بالا می‌آید</span>
 
-<span class="c-dim"># دریافت هر ایمیج عمومی از طریق Worker:</span>
-docker pull localhost:8787/library/nginx:latest</code></pre>
+<span class="c-dim"># دریافت هر ایمیج عمومی از طریق پروکسی:</span>
+docker pull localhost:5000/library/nginx:latest</code></pre>
                     </div>
                     <div class="code-card">
                         <div class="code-head">
-                            <span>دیپلوی روی Cloudflare</span>
+                            <span>فعال‌کردن کش (اختیاری)</span>
                             <button type="button" class="copy-btn"
-                                data-copy="npx wrangler login&#10;npx wrangler deploy">
+                                data-copy="CACHE_ENABLED=true&#10;CACHE_MAX_SIZE=10GB">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="icon-sm">
                                     <rect x="9" y="9" width="12" height="12" rx="2" />
@@ -319,11 +321,10 @@ docker pull localhost:8787/library/nginx:latest</code></pre>
                                 کپی
                             </button>
                         </div>
-<pre class="code-body"><code>npx wrangler login
-npx wrangler deploy   <span class="c-dim"># Worker روی workers.dev بالا می‌آید</span>
-
-<span class="c-dim"># بعد از اتصال دامنه‌ی اختصاصی:</span>
-docker pull registry.sadhanet.com/library/nginx:latest</code></pre>
+<pre class="code-body"><code><span class="c-dim"># کش به‌طور پیش‌فرض خاموش است؛ برای فعال‌سازی، این متغیرها را</span>
+<span class="c-dim"># در فایل پیکربندی (wrangler.jsonc ← بخش vars) تنظیم کنید:</span>
+CACHE_ENABLED=true
+CACHE_MAX_SIZE=10GB   <span class="c-dim"># سقف حجم کش (اختیاری)</span></code></pre>
                     </div>
                     <div class="code-card qs-wide">
                         <div class="code-head">
@@ -344,8 +345,8 @@ docker pull registry.sadhanet.com/library/nginx:latest</code></pre>
 }</code></pre>
                     </div>
                 </div>
-                <p class="qs-note">سپس <a href="http://localhost:8787" target="_blank" rel="noopener"
-                        dir="ltr">http://localhost:8787</a> را باز کنید — همین صفحه توسط خودِ Worker سرو می‌شود.</p>
+                <p class="qs-note">سپس <a href="http://localhost:5000" target="_blank" rel="noopener"
+                        dir="ltr">http://localhost:5000</a> را باز کنید — همین صفحه توسط خودِ سرویس سرو می‌شود.</p>
             </div>
         </section>
 
@@ -399,7 +400,7 @@ docker pull registry.sadhanet.com/library/nginx:latest</code></pre>
     <footer class="site-footer">
         <div class="container footer-inner">
             <img class="footer-logo" src="logo.svg" alt="" aria-hidden="true">
-            <p>اجرا روی Cloudflare Workers · مجوز MIT</p>
+            <p>سبک، سلف-هاست و متن‌باز · مجوز MIT</p>
             <a dir="ltr" href="https://github.com/sadra824/internal-docker-registry" target="_blank"
                 rel="noopener">sadra824/internal-docker-registry</a>
         </div>
