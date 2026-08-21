@@ -12,6 +12,7 @@
  */
 
 import { createV2Router } from './routes/v2.js';
+import { createPassthroughRouter } from './routes/passthrough.js';
 import { TransientStore } from './storage/transient.js';
 import { R2Store } from './storage/r2.js';
 import { MemoryStore } from './storage/memory.js';
@@ -96,11 +97,43 @@ function notFound() {
     );
 }
 
+// مسیر دانلود مستقیم — بدون state، ساختنش در هر درخواست ارزان است
+function getPassthroughRouter(env) {
+    return createPassthroughRouter({
+        getRegistries: () => getRegistries(env),
+        sourceBaseUrl: env.SOURCE_BASE_URL,
+        // فقط Range برای ادامه‌ی دانلود (wget -c) پاس داده می‌شود؛
+        // بدون signal تا استریم‌های طولانی وسط راه قطع نشوند
+        fetchRaw: (target, request) => {
+            const range = request.headers.get('Range');
+            return fetch(target, {
+                redirect: 'follow',
+                headers: range ? { Range: range } : undefined
+            });
+        }
+    });
+}
+
 export default {
     async fetch(request, env, ctx) {
         void ctx;
 
         const url = new URL(request.url);
+
+        // دانلود مستقیم (pass-through) — سبک‌ترین مسیر، مناسب پلن رایگان
+        if (
+            url.pathname === '/image'
+            || url.pathname === '/platforms'
+        ) {
+            try {
+                return await getPassthroughRouter(env)(request);
+            } catch (err) {
+                return Response.json(
+                    { errors: [{ code: 'INTERNAL_ERROR', message: 'خطای داخلی سرور' }] },
+                    { status: 500 }
+                );
+            }
+        }
 
         if (url.pathname === '/v2' || url.pathname.startsWith('/v2/')) {
             let router;

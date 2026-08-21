@@ -81,6 +81,11 @@
     );
 
     function stepsFor(current) {
+        // حالت ساده (بدون شاخه‌ی hit/miss): همه‌ی مراحل پشت‌سرهم
+        if (!document.querySelector('[data-branch]')) {
+            return flowSteps;
+        }
+
         var selector = current === 'warm'
             ? '[data-step="1"], [data-step="2"], [data-step="3w"]'
             : '[data-step="1"], [data-step="2"], [data-step="3c"], [data-step="4c"], [data-step="5c"]';

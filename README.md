@@ -1,6 +1,9 @@
 # Sadhanet Docker Registry — on Cloudflare Workers
 
-A lightweight, caching proxy for the Docker Registry API v2 that runs on **Cloudflare Workers**. It sits between your Docker client and upstream registries, fetches images through a configurable source service, converts them on the fly, and serves subsequent requests from the edge cache — or from **R2** when durable caching is enabled.
+A lightweight image-distribution service that runs on **Cloudflare Workers** and sits between your Docker tooling and upstream registries. Two modes are available:
+
+- **Direct download (default, near-zero CPU):** `GET /image?name=nginx:latest` streams the `docker save` tarball straight from the source service to the client — no storage, no processing, resume-friendly (`wget -c`). Load it with `docker load`. Works on the Workers **free plan**.
+- **Registry v2 API (`/v2/…`):** full manifest/blob compatibility with conversion and optional caching — heavier on CPU, recommended for paid plans only.
 
 > **Caching is disabled by default.** With `CACHE_ENABLED=false` (the default), the proxy uses only a best-effort, short-lived edge cache (Cache API, 30-minute TTL). Set `CACHE_ENABLED=true` to persist blobs and manifests in an R2 bucket.
 
@@ -8,6 +11,7 @@ A lightweight, caching proxy for the Docker Registry API v2 that runs on **Cloud
 
 ## ✨ Features
 
+- **Direct pass-through downloads** – `GET /image?name=…` streams the tarball straight to the client with zero processing and zero storage; `Range` requests (`wget -c`) supported for resumable downloads. Runs comfortably on the free plan.
 - **Docker Registry API v2 compliant** – Works seamlessly with `docker pull`, `docker build`, Kubernetes, and other container tools.
 - **Runs on Cloudflare Workers** – No permanent server, no infrastructure to manage; every request executes at the edge. No `fs`, no `listen`, no `setInterval`.
 - **Cache disabled by default** – Best-effort transient edge cache (Cache API) with a configurable TTL; opt in to durable caching backed by **R2** (S3-compatible).
@@ -168,7 +172,26 @@ origins/<repository>    # winning upstream registry (for debugging)
 
 ---
 
-## 🔌 API Endpoints (Docker Registry v2)
+## 🔌 API Endpoints
+
+### Direct download (recommended — free-plan friendly)
+
+- `GET /image?name=<ref>` – Stream the image tarball (`docker save` format) directly to the client; pass-through, resumable via `Range`/`wget -c`
+- `GET /image?name=<ref>&os=linux&arch=arm64&variant=v8` – Select a specific platform (default `linux/amd64`)
+- `GET /platforms?name=<ref>` – List available platforms for an image
+
+```bash
+# stream straight into docker:
+wget -q -O - "https://registry.example.com/image?name=nginx:latest" | docker load
+
+# resumable download, then load:
+wget -c --content-disposition "https://registry.example.com/image?name=nginx:latest"
+docker load -i nginx_latest.tar
+```
+
+If `name` starts with a registry host (e.g. `ghcr.io/owner/img:tag`), only that registry is used; otherwise registries are tried in order and the first success wins.
+
+### Docker Registry v2 (heavier — needs CPU headroom for large images)
 
 - `GET /v2/` – Version check
 - `GET /v2/healthz` – Liveness probe

@@ -52,11 +52,10 @@
                     </p>
                     <h1>رجیستری <span class="accent">اختصاصی صدهانت</span> — کامل، سریع و همیشه در دسترس</h1>
                     <p class="lede">
-                        مرجع کامل ایمیج‌های داکر برای زیرساخت شما؛ هر ایمیج از هر رجیستری عمومی دریافت و با همان
-                        پروتکل استاندارد Registry v2 سرو می‌شود — برای عبور از محدودیت رجیستری‌های خارجی،
-                        بدون واسطه و بدون دردسر قابل استفاده است.
-                        با فعال‌کردن کش، ایمیج‌های پرکاربرد با تأخیر کم و بدون مصرف دوباره پهنای‌باند
-                        در دسترس هستند.
+                        مرجع کامل ایمیج‌های داکر برای زیرساخت شما؛ هر ایمیج از هر رجیستری عمومی —
+                        برای عبور از محدودیت رجیستری‌های خارجی، بدون واسطه و بدون دردسر.
+                        فایل ایمیج بدون ذخیره‌سازی و پردازش اضافه، مستقیماً به کلاینت استریم می‌شود
+                        و با یک دستور <code>docker load</code> بارگذاری می‌شود.
                     </p>
                     <div class="hero-actions">
                         <a class="btn btn-primary" href="#quick-start">
@@ -71,16 +70,16 @@
                     </div>
                     <dl class="hero-stats">
                         <div>
-                            <dt>API نسخه ۲</dt>
-                            <dd>بدون هیچ تغییری برای docker ،podman و Kubernetes</dd>
+                            <dt>دانلود مستقیم</dt>
+                            <dd>استریم تاربال ایمیج بدون ذخیره‌سازی روی سرور</dd>
                         </div>
                         <div>
                             <dt>۱۳ رجیستری</dt>
                             <dd dir="ltr">docker.io ،ghcr ،quay ،gcr و…</dd>
                         </div>
                         <div>
-                            <dt>کش اختیاری</dt>
-                            <dd>قابل فعال‌سازی برای استقرار self-host</dd>
+                            <dt>بدون پردازش</dt>
+                            <dd>مصرف منابع تقریباً صفر؛ مناسب زیرساخت‌های سبک</dd>
                         </div>
                     </dl>
                 </div>
@@ -93,16 +92,14 @@
                         <span class="terminal-title" dir="ltr">docker — bash</span>
                     </div>
                     <pre class="terminal-body" id="hero-terminal" tabindex="0"
-                        aria-label="دموی ترمینال: دریافت nginx از طریق رجیستری. اولین pull دانلود و تبدیل می‌شود؛ pull دوم از کش سرو می‌شود."><code><span class="t-prompt">$</span> <span class="t-cmd" id="type-target">docker pull registry.sadhanet.com/library/nginx:latest</span>
-<span class="t-dim">latest: Pulling from library/nginx</span>
-<span class="t-dim">a8e4797c4b53: Pull complete</span>
-<span class="t-dim">6e2ca3bab02: Pull complete</span>
-<span class="t-dim">[fetch] docker.io/library/nginx:latest — converted &amp; cached</span>
-<span class="t-ok">Status: Downloaded newer image ✓</span>
+                        aria-label="دموی ترمینال: دریافت ایمیج nginx از طریق سرویس و بارگذاری مستقیم با docker load؛ روش دوم دانلود با قابلیت ادامه."><code><span class="t-prompt">$</span> <span class="t-cmd" id="type-target">wget -q -O - "https://registry.sadhanet.com/image?name=nginx:latest" | docker load</span>
+<span class="t-dim">استریم مستقیم تاربال از رجیستری برنده…</span>
+<span class="t-ok">Loaded image: nginx:latest ✓</span>
 
-<span class="t-prompt">$</span> <span class="t-cmd">docker pull registry.sadhanet.com/library/nginx:latest</span>
-<span class="t-dim">[cache] manifest + blobs served from cache</span>
-<span class="t-ok">Status: Image is up to date ✓ (much faster)</span></code></pre>
+<span class="t-prompt">$</span> <span class="t-cmd">wget -c --content-disposition "https://registry.sadhanet.com/image?name=redis:7"</span>
+<span class="t-dim">redis_7.tar  100%[==================&gt;]  118.20M  9.8MB/s</span>
+<span class="t-dim"># قابل ادامه: اگر قطع شد، همان دستور دوباره از همان‌جا ادامه می‌دهد</span>
+<span class="t-ok">docker load -i redis_7.tar ✓</span></code></pre>
                 </div>
             </div>
         </section>
@@ -117,18 +114,12 @@
                 </div>
 
                 <div class="sim-controls">
-                    <div class="segmented" role="group" aria-label="انتخاب سناریوی pull">
-                        <button type="button" class="seg-btn" data-scenario="cold" aria-pressed="false">اولین pull <span
-                                class="seg-tag">کش miss</span></button>
-                        <button type="button" class="seg-btn" data-scenario="warm" aria-pressed="true">pullهای بعدی
-                            <span class="seg-tag">کش hit</span></button>
-                    </div>
                     <button type="button" class="btn btn-primary btn-sm" id="sim-run">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="icon-sm">
                             <polygon points="6 4 20 12 6 20 6 4" stroke-linejoin="round" />
                         </svg>
-                        شبیه‌سازی یک pull
+                        شبیه‌سازی یک دانلود
                     </button>
                 </div>
 
@@ -137,70 +128,30 @@
                         <li class="flow-step" data-step="1">
                             <span class="step-no" aria-hidden="true">۱</span>
                             <div class="step-body">
-                                <h3>کلاینت داکر</h3>
-                                <p><code>docker pull registry.sadhanet.com/library/nginx:latest</code> — رجیستری همان
-                                    پروتکل
-                                    استاندارد Registry v2 را صحبت می‌کند؛ پس کلاینت نیازی به تغییر ندارد.</p>
+                                <h3>درخواست دانلود</h3>
+                                <p><code>GET /image?name=nginx:latest</code> — با wget یا curl؛ خروجی مستقیماً به
+                                    <code>docker load</code> pipe می‌شود یا با <code>wget -c</code> ذخیره و ادامه‌پذیر است.</p>
                             </div>
                         </li>
                         <li class="flow-step" data-step="2">
                             <span class="step-no" aria-hidden="true">۲</span>
                             <div class="step-body">
-                                <h3>بررسی کش</h3>
-                                <p>جست‌وجوی منیفست و blobها در کش (در صورت فعال بودن)، با کلید
-                                    digestهای <code>sha256</code> و به‌صورت content-addressed.
-                                </p>
+                                <h3>انتخاب رجیستری</h3>
+                                <p>رجیستری‌های پیکربندی‌شده به‌ترتیب از طریق سرویس منبع امتحان می‌شوند —
+                                    اولین پاسخ موفق برنده است و بقیه اصلاً شروع نمی‌شوند.</p>
+                            </div>
+                        </li>
+                        <li class="flow-step" data-step="3">
+                            <span class="step-no" aria-hidden="true">۳</span>
+                            <div class="step-body">
+                                <h3>استریم مستقیم به کلاینت</h3>
+                                <p>تاربال ایمیج بدون هیچ ذخیره‌سازی و پردازشی، همان‌جا به کلاینت استریم می‌شود —
+                                    بدون کش، بدون blob و بدون تبدیل. مصرف منابع تقریباً صفر است.</p>
                             </div>
                         </li>
                     </ol>
-                    <div class="flow-branch" aria-live="polite">
-                        <div class="branch branch-hit" data-branch="warm">
-                            <div class="branch-badge hit">کش hit</div>
-                            <ol class="flow-steps">
-                                <li class="flow-step" data-step="3w">
-                                    <span class="step-no" aria-hidden="true">۳</span>
-                                    <div class="step-body">
-                                        <h3>سرو از کش</h3>
-                                        <p>منیفست و لایه‌ها مستقیم از کش استریم می‌شوند — بدون ترافیک خارجی،
-                                            با تأخیر در حد شبکه محلی.</p>
-                                    </div>
-                                </li>
-                            </ol>
-                        </div>
-                        <div class="branch branch-miss" data-branch="cold">
-                            <div class="branch-badge miss">کش miss</div>
-                            <ol class="flow-steps">
-                                <li class="flow-step" data-step="3c">
-                                    <span class="step-no" aria-hidden="true">۳</span>
-                                    <div class="step-body">
-                                        <h3>دریافت از طریق سرویس منبع</h3>
-                                        <p>سرویس همه رجیستری‌های پیکربندی‌شده را به‌صورت موازی از طریق
-                                            <code>dockerimagesave.akiel.dev</code> امتحان می‌کند — اولین جواب برنده است.
-                                        </p>
-                                    </div>
-                                </li>
-                                <li class="flow-step" data-step="4c">
-                                    <span class="step-no" aria-hidden="true">۴</span>
-                                    <div class="step-body">
-                                        <h3>تبدیل و ذخیره</h3>
-                                        <p>tarball مربوط به <code>docker save</code> باز می‌شود، به blobها و
-                                            منیفست‌های content-addressed تبدیل و در کش نوشته می‌شود.</p>
-                                    </div>
-                                </li>
-                                <li class="flow-step" data-step="5c">
-                                    <span class="step-no" aria-hidden="true">۵</span>
-                                    <div class="step-body">
-                                        <h3>پاسخ به کلاینت</h3>
-                                        <p>داکر تصویر را از منیفست و blobها — دقیقاً مثل یک رجیستری معمولی — می‌سازد.
-                                        </p>
-                                    </div>
-                                </li>
-                            </ol>
-                        </div>
-                    </div>
-                    <p class="flow-note">کش به‌طور پیش‌فرض خاموش است؛ در این حالت داده‌های موقت بعد از ۳۰ دقیقه به‌صورت
-                        خودکار منقضی می‌شوند و با فعال‌کردن کش، پاک‌سازی دوره‌ای حجم را زیر
-                        <code>CACHE_MAX_SIZE</code> نگه می‌دارد.
+                    <p class="flow-note">هیچ داده‌ای روی سرور نگه داشته نمی‌شود؛ دانلودهای نیمه‌تمام با
+                        <code>wget -c</code> از همان‌جایی که قطع شده ادامه می‌یابند.
                     </p>
                 </div>
             </div>
@@ -220,9 +171,9 @@
                             <path d="M22 12.5c0 2.4-4.5 4.3-10 4.3S2 14.9 2 12.5V9h20v3.5Z" />
                             <path d="M22 9c0 2-4.5 3.7-10 3.7S2 11 2 9s4.5-3.7 10-3.7S22 7 22 9Z" />
                         </svg>
-                        <h3>سازگار با Registry v2</h3>
-                        <p>بدون هیچ تنظیمی با <code>docker pull</code>، <code>docker build</code>، میرورهای Kubernetes و
-                            هر کلاینت OCI کار می‌کند.</p>
+                        <h3>پروتکل ساده HTTP</h3>
+                        <p>دانلود با <code>wget</code> یا <code>curl</code> و بارگذاری با <code>docker load</code>؛
+                            بدون هیچ تنظیمی روی کلاینت داکر.</p>
                     </li>
                     <li class="feature-card">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -230,11 +181,9 @@
                             <circle cx="12" cy="12" r="9" />
                             <path d="M12 7v5l3 3" />
                         </svg>
-                        <h3>کش اختیاری</h3>
-                        <p>کش به‌طور پیش‌فرض خاموش است و داده‌های موقت بعد از ۳۰ دقیقه خودکار حذف می‌شوند.
-                            با <code>CACHE_ENABLED=true</code> بلاب‌ها و منیفست‌ها به‌صورت دائمی و
-                            content-addressed ذخیره می‌شوند.
-                        </p>
+                        <h3>استریم مستقیم</h3>
+                        <p>هیچ ذخیره‌سازی و پردازشی روی سرور انجام نمی‌شود؛ تاربال ایمیج مستقیماً از منبع به
+                            کلاینت پاس می‌شود و مصرف منابع تقریباً صفر است.</p>
                     </li>
                     <li class="feature-card">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -244,7 +193,7 @@
                         </svg>
                         <h3>fallback روی چند رجیستری</h3>
                         <p>۱۳ منبع بالادستی — docker.io ،ghcr.io ،quay.io ،gcr.io ،mcr.microsoft.com، آروان‌کلود و… —
-                            به‌صورت موازی امتحان می‌شوند؛ اولین موفق برنده است.</p>
+                            به‌ترتیب امتحان می‌شوند؛ اولین موفق برنده است.</p>
                     </li>
                     <li class="feature-card">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -253,8 +202,7 @@
                             <path d="M9 9h6v6H9z" />
                         </svg>
                         <h3>پشتیبانی چندمعماری</h3>
-                        <p>نسخه پلتفرم مناسب میزبان با <code>DEFAULT_PLATFORM_OS</code>/<code>ARCH</code> انتخاب می‌شود
-                            (پیش‌فرض <code>linux/amd64</code>).</p>
+                        <p>با پارامترهای <code>os</code> و <code>arch</code> نسخه‌ی پلتفرم دلخواه را بگیرید (پیش‌فرض <code>linux/amd64</code>).</p>
                     </li>
                     <li class="feature-card">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -263,9 +211,9 @@
                             <path d="M1 3h22v5H1z" />
                             <path d="M10 12h4" />
                         </svg>
-                        <h3>تبدیل در لحظه</h3>
-                        <p>tarballهای <code>docker save</code> و OCI layoutها به‌صورت خودکار باز و به ساختار استاندارد
-                            رجیستری باز‌بسته‌بندی می‌شوند.</p>
+                        <h3>قابل ادامه (Resume)</h3>
+                        <p>دانلودهای نیمه‌تمام با <code>wget -c</code> از همان‌جا ادامه می‌شوند — مناسب خطوط کند
+                            و ناپایدار.</p>
                     </li>
                     <li class="feature-card">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -311,9 +259,9 @@ docker pull localhost:5000/library/nginx:latest</code></pre>
                     </div>
                     <div class="code-card">
                         <div class="code-head">
-                            <span>فعال‌کردن کش (اختیاری)</span>
+                            <span>دریافت ایمیج</span>
                             <button type="button" class="copy-btn"
-                                data-copy="CACHE_ENABLED=true&#10;CACHE_MAX_SIZE=10GB">
+                                data-copy="wget -q -O - &quot;https://registry.sadhanet.com/image?name=nginx:latest&quot; | docker load">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="icon-sm">
                                     <rect x="9" y="9" width="12" height="12" rx="2" />
@@ -322,16 +270,18 @@ docker pull localhost:5000/library/nginx:latest</code></pre>
                                 کپی
                             </button>
                         </div>
-<pre class="code-body"><code><span class="c-dim"># کش به‌طور پیش‌فرض خاموش است؛ برای فعال‌سازی، این متغیرها را</span>
-<span class="c-dim"># در فایل پیکربندی (wrangler.jsonc ← بخش vars) تنظیم کنید:</span>
-CACHE_ENABLED=true
-CACHE_MAX_SIZE=10GB   <span class="c-dim"># سقف حجم کش (اختیاری)</span></code></pre>
+<pre class="code-body"><code><span class="c-dim"># مستقیم داخل داکر:</span>
+wget -q -O - "https://registry.sadhanet.com/image?name=nginx:latest" | docker load
+
+<span class="c-dim"># یا دانلود با قابلیت ادامه:</span>
+wget -c --content-disposition "https://registry.sadhanet.com/image?name=nginx:latest"
+docker load -i nginx_latest.tar</code></pre>
                     </div>
                     <div class="code-card qs-wide">
                         <div class="code-head">
-                            <span>استفاده به‌عنوان registry mirror (اختیاری)</span>
+                            <span>معماری و پلتفرم دلخواه</span>
                             <button type="button" class="copy-btn"
-                                data-copy='{ "registry-mirrors": ["https://registry.sadhanet.com"] }'>
+                                data-copy="wget -q -O - &quot;https://registry.sadhanet.com/image?name=nginx:latest&amp;os=linux&amp;arch=arm64&quot; | docker load">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="icon-sm">
                                     <rect x="9" y="9" width="12" height="12" rx="2" />
@@ -340,10 +290,11 @@ CACHE_MAX_SIZE=10GB   <span class="c-dim"># سقف حجم کش (اختیاری)<
                                 کپی
                             </button>
                         </div>
-                        <pre class="code-body"><code><span class="c-dim"># در /etc/docker/daemon.json — همه pullهای داکر به‌صورت شفاف کش می‌شوند:</span>
-{
-  "registry-mirrors": ["https://registry.sadhanet.com"]
-}</code></pre>
+<pre class="code-body"><code><span class="c-dim"># دانلود نسخه‌ی arm64 (پیش‌فرض linux/amd64):</span>
+wget -q -O - "https://registry.sadhanet.com/image?name=nginx:latest&amp;os=linux&amp;arch=arm64" | docker load
+
+<span class="c-dim"># فهرست پلتفرم‌های موجود یک ایمیج:</span>
+curl "https://registry.sadhanet.com/platforms?name=nginx:latest"</code></pre>
                     </div>
                 </div>
                 <p class="qs-note">سپس <a href="http://localhost:5000" target="_blank" rel="noopener"
@@ -356,7 +307,7 @@ CACHE_MAX_SIZE=10GB   <span class="c-dim"># سقف حجم کش (اختیاری)<
             <div class="container">
                 <div class="section-head">
                     <h2>دستورهای API</h2>
-                    <p>سطح الزامی Registry v2 — فقط‌خواندنی (push پاسخ <code>501</code> می‌گیرد).</p>
+                    <p>سبک و ساده — همه چیز با یک GET.</p>
                 </div>
                 <div class="table-wrap">
                     <table class="api-table">
@@ -368,28 +319,24 @@ CACHE_MAX_SIZE=10GB   <span class="c-dim"># سقف حجم کش (اختیاری)<
                         </thead>
                         <tbody>
                             <tr>
-                                <td><code>GET /v2/</code></td>
-                                <td>بررسی نسخه</td>
+                                <td><code>GET /image?name=&lt;ref&gt;</code></td>
+                                <td>دانلود مستقیم تاربال ایمیج — استریم pass-through با پشتیبانی resume</td>
                             </tr>
                             <tr>
-                                <td><code>GET /v2/&lt;name&gt;/manifests/&lt;ref&gt;</code></td>
-                                <td>دریافت منیفست (تگ یا digest)</td>
+                                <td><code>GET /image?name=&lt;ref&gt;&amp;os=&lt;os&gt;&amp;arch=&lt;arch&gt;</code></td>
+                                <td>انتخاب پلتفرم (پیش‌فرض <code>linux/amd64</code>)</td>
                             </tr>
                             <tr>
-                                <td><code>GET /v2/&lt;name&gt;/blobs/&lt;digest&gt;</code></td>
-                                <td>دریافت blob / لایه</td>
+                                <td><code>GET /platforms?name=&lt;ref&gt;</code></td>
+                                <td>فهرست پلتفرم‌های موجود ایمیج</td>
                             </tr>
                             <tr>
-                                <td><code>HEAD /v2/&lt;name&gt;/blobs/&lt;digest&gt;</code></td>
-                                <td>بررسی وجود blob</td>
+                                <td><code dir="ltr">Range: bytes=…</code></td>
+                                <td>ادامه‌ی دانلود نیمه‌تمام (<code>wget -c</code>)</td>
                             </tr>
                             <tr>
-                                <td><code>GET /v2/&lt;name&gt;/tags/list</code></td>
-                                <td>فهرست تگ‌های کش‌شده</td>
-                            </tr>
-                            <tr>
-                                <td><code>POST /v2/…/blobs/uploads/</code></td>
-                                <td>پشتیبانی نمی‌شود — فقط pull</td>
+                                <td><code>/v2/…</code></td>
+                                <td>API سازگار با Registry v2 نیز موجود است (برای ایمیج‌های بزرگ به CPU بیشتر نیاز دارد)</td>
                             </tr>
                         </tbody>
                     </table>
