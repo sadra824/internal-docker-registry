@@ -4,3 +4,4 @@ node_modules/
 data/
 *.log
 __pycache__/
+.wrangler/

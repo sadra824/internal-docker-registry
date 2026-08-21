@@ -1,18 +1,19 @@
 {
     "name": "docker-registry-proxy",
-    "version": "1.0.0",
-    "description": "Docker Registry API v2 compatible proxy that pulls images via dockerimagesave.akiel.dev",
-    "main": "src/server.js",
+    "version": "2.0.0",
+    "description": "Docker Registry API v2 compatible pull-through cache proxy — runs on Cloudflare Workers",
+    "type": "module",
+    "main": "src/index.js",
     "scripts": {
-        "start": "node src/server.js",
-        "dev": "node --watch src/server.js"
+        "dev": "wrangler dev",
+        "deploy": "wrangler deploy",
+        "test": "node --test tests/*.test.js"
     },
     "engines": {
         "node": ">=18"
     },
-    "dependencies": {
-        "dotenv": "^16.4.5",
-        "express": "^4.19.2",
-        "tar": "^7.4.3"
+    "license": "MIT",
+    "devDependencies": {
+        "wrangler": "^4.0.0"
     }
 }

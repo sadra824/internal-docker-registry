@@ -1,41 +1,64 @@
-# Docker Registry Proxy v2
+# Sadhanet Docker Registry — on Cloudflare Workers
 
-A lightweight, caching proxy for the Docker Registry API v2 that sits between your Docker client and upstream registries. It fetches images from a configurable source service, caches them on disk, and serves subsequent requests with low latency—reducing bandwidth usage and dependency on external registries.
+A lightweight, caching proxy for the Docker Registry API v2 that runs on **Cloudflare Workers**. It sits between your Docker client and upstream registries, fetches images through a configurable source service, converts them on the fly, and serves subsequent requests from the edge cache — or from **R2** when durable caching is enabled.
+
+> **Caching is disabled by default.** With `CACHE_ENABLED=false` (the default), the proxy uses only a best-effort, short-lived edge cache (Cache API, 30-minute TTL). Set `CACHE_ENABLED=true` to persist blobs and manifests in an R2 bucket.
 
 ---
 
 ## ✨ Features
 
-- **Built-in landing page** – The root route (`/`) serves a small interactive landing page (plain HTML/CSS/JS, no dependencies) that explains how the proxy works, with a pull simulator, quick-start snippets, and the API reference. See [`public/`](public/).
 - **Docker Registry API v2 compliant** – Works seamlessly with `docker pull`, `docker build`, Kubernetes, and other container tools.
-- **Intelligent caching** – Stores blobs (layers) and manifests on disk with configurable size limits and automatic cleanup.
-- **Multi‑registry fallback** – Tries a prioritized list of upstream registries (`docker.io`, `ghcr.io`, `quay.io`, `gcr.io`, `mcr.microsoft.com`, etc.) until the image is found.
+- **Runs on Cloudflare Workers** – No permanent server, no infrastructure to manage; every request executes at the edge. No `fs`, no `listen`, no `setInterval`.
+- **Cache disabled by default** – Best-effort transient edge cache (Cache API) with a configurable TTL; opt in to durable caching backed by **R2** (S3-compatible).
+- **Multi‑registry fallback** – Tries a prioritized list of upstream registries (`docker.arvancloud.ir`, `docker.io`, `ghcr.io`, `quay.io`, `gcr.io`, `mcr.microsoft.com`, …) in parallel until the image is found.
 - **Multi‑architecture support** – Automatically selects the appropriate platform variant based on `DEFAULT_PLATFORM_OS`/`ARCH` (default: `linux/amd64`).
-- **Automatic format conversion** – Handles both modern OCI layout and classic `docker save` tarballs, extracting and re‑packing layers on the fly.
-- **Transient (cache‑less) mode** – Store images in a temporary directory with auto‑eviction after 30 minutes of inactivity—ideal for ephemeral environments.
-- **LRU eviction** – When cache size limit is reached, the least recently used blobs are removed first.
-- **Lightweight & fast** – Built with Node.js and Express, requires minimal resources.
+- **Streaming conversion** – The `docker save` tarball is parsed as a stream (no filesystem): modern OCI-layout tarballs are converted with large blobs streamed straight into storage; classic tarballs are gzipped/hashed in memory (with size guards).
+- **Built-in landing page** – The root route serves an interactive landing page as Workers Static Assets (see [`public/`](public/)).
+- **Cron-based cleanup** – In R2 mode, a Cron Trigger keeps the bucket under `CACHE_MAX_SIZE` (no long-running timers).
 
 ---
 
 ## 🏗 Architecture Overview
 
 ```
-┌─────────────────┐      ┌───────────────────────┐      ┌─────────────────┐
-│  Docker Client  │ ──► │  Registry Proxy (v2)   │ ──► │  Cache (disk)   │
-│  (pull, build)  │ ◄── │  - Express server      │ ◄── │  - blobs/       │
-└─────────────────┘      │  - Route handlers     │      │  - manifests/   │
-                         │  - Fetcher module     │      │  - tags.json    │
-                         │  - Converter module   │      └─────────────────┘
-                         │  - Store manager      │
-                         └──────────┬────────────┘
-                                    │
-                                    ▼
-                         ┌─────────────────────┐
-                         │  Source Service     │
-                         │  (dockerimagesave.  │
-                         │   akiel.dev/image)  │
-                         └─────────────────────┘
+┌─────────────────┐        ┌────────────────────────────┐
+│  Docker Client  │ ─────► │   Cloudflare Worker        │
+│  (pull, build)  │ ◄───── │   src/index.js (fetch)     │
+└─────────────────┘        │   ├─ routes/v2.js          │
+                           │   ├─ services/registry.js  │
+                           │   ├─ services/converter.js │
+                           │   └─ storage/              │
+                           └───────┬──────────┬─────────┘
+                                   │          │
+                     ┌─────────────▼───┐  ┌───▼──────────────┐
+                     │  Source Service │  │  Cache            │
+                     │  dockerimagesave│  │  - edge (default) │
+                     │  .akiel.dev     │  │  - R2 (optional) │
+                     └─────────────────┘  └──────────────────┘
+```
+
+Project layout:
+
+```
+src/
+├── index.js               ← Worker entry (fetch + scheduled/cron)
+├── routes/v2.js           ← Docker Registry v2 API (runtime-agnostic)
+├── services/
+│   ├── registry.js        ← business logic (resolve, fallback, dedup)
+│   ├── converter.js       ← streaming tar → registry v2 layout
+│   ├── fetcher.js         ← source service download (streaming)
+│   └── registries.js      ← upstream registry list
+├── storage/
+│   ├── transient.js       ← Cache API store (default, cache off)
+│   ├── r2.js              ← R2 store (durable, opt-in)
+│   └── memory.js          ← in-memory store (tests / fallback)
+└── utils/
+    ├── tar.js             ← streaming tar parser (no dependencies)
+    └── sha256.js          ← WebCrypto digest helpers
+
+public/                    ← landing page (Workers Static Assets)
+tests/                     ← node --test unit tests
 ```
 
 ---
@@ -44,59 +67,178 @@ A lightweight, caching proxy for the Docker Registry API v2 that sits between yo
 
 ### Prerequisites
 
-- Node.js ≥ 18 (or Docker)
-- At least 10 GB of free disk space (adjustable)
-- Network access to the source service and upstream registries
+- Node.js ≥ 18 (for `wrangler` and the test suite)
+- A Cloudflare account (free tier works)
+- Network access from Workers to the source service and upstream registries
 
-### Quick Start with Docker Compose
+### Run locally
 
 ```bash
 git clone https://github.com/sadra824/internal-docker-registry.git
 cd internal-docker-registry
-docker-compose up -d
+npm install
+npx wrangler dev
 ```
 
-The proxy will be available at `http://localhost:5000`. Opening it in a browser shows the built-in landing page (see below); `docker` clients talk to the same host on the `/v2` API.
-
-### Manual Start (Node.js)
+The proxy is now at `http://localhost:8787`:
 
 ```bash
-npm install
-cp .env.example .env   # edit variables if needed
-npm start
+docker pull localhost:8787/library/nginx:latest
+```
+
+Opening `http://localhost:8787` in a browser shows the built-in landing page.
+
+### Deploy
+
+```bash
+npx wrangler login
+npx wrangler deploy
+```
+
+The Worker gets a `*.workers.dev` URL; attach a custom domain (Workers → Settings → Domains & Routes) and pull through it, e.g. `docker pull registry.sadhanet.com/library/nginx:latest`.
+
+### Enable durable caching (R2)
+
+```bash
+npx wrangler r2 bucket create registry-cache
+```
+
+Then in [`wrangler.jsonc`](wrangler.jsonc):
+
+1. Uncomment the `r2_buckets` block (binding `REGISTRY_BUCKET`).
+2. Set `CACHE_ENABLED` to `"true"`.
+3. Optionally set `CACHE_MAX_SIZE` (e.g. `"10GB"`) and uncomment the `triggers.crons` block so a scheduled cleanup keeps the bucket under the limit.
+
+### Run tests
+
+```bash
+npm test
 ```
 
 ---
 
 ## ⚙️ Configuration
 
-All settings are controlled via environment variables. See `.env.example` for a complete list.
+All settings come from Worker environment variables (Vars in `wrangler.jsonc`, or the dashboard) — read via `env.X`, not `process.env`.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `PORT` | Listening port | `5000` |
-| `DATA_DIR` | Persistent cache directory | `./data` |
+| `CACHE_ENABLED` | Enable the durable R2 cache. **Default: off.** | `false` |
+| `REGISTRY_BUCKET` | R2 bucket binding (required when `CACHE_ENABLED=true`) | — |
 | `SOURCE_BASE_URL` | Source service endpoint for downloading images | `https://dockerimagesave.akiel.dev/image` |
 | `DEFAULT_PLATFORM_OS` | Default OS for multi‑arch images | `linux` |
 | `DEFAULT_PLATFORM_ARCH` | Default architecture | `amd64` |
-| `CACHE_ENABLED` | Enable/disable persistent cache | `true` |
-| `CACHE_MAX_SIZE` | Maximum cache size (e.g., `10GB`, `500MB`) | `0` (unlimited) |
-| `CACHE_CLEANUP_INTERVAL` | How often to run cache cleanup (e.g., `1h`, `30m`) | `1h` |
-| `NODE_ENV` | Set to `production` for optimized performance | `development` |
+| `TRANSIENT_TTL_SECONDS` | TTL of the transient edge cache (cache-off mode) | `1800` |
+| `CACHE_MAX_SIZE` | Max R2 blob budget for cron cleanup (e.g. `10GB`, `500MB`) | `0` (unlimited) |
+| `REGISTRIES_JSON` | JSON array overriding the upstream registry list | built-in list |
+| `FETCH_TIMEOUT_MS` | Timeout for source-service fetches | `60000` |
 
-> **Note:** The `registries.json` file contains the ordered list of upstream registries. You can modify it to add/remove/prioritize sources.
+---
+
+## 🔄 How It Works
+
+1. **Pull request** – The Docker client sends `GET /v2/<image>/manifests/<tag>` to the Worker.
+2. **Cache lookup** – The proxy checks the active store (edge cache by default, R2 when enabled) for the manifest digest (by tag or digest reference).
+   - If **cached**, it is served immediately.
+   - If **not cached**, the proxy fetches from upstream.
+3. **Fetching** – Every configured upstream registry is tried **in parallel** via `SOURCE_BASE_URL?name=<registry>/<image>:<tag>`; the first success wins (duplicate concurrent pulls are deduplicated per isolate).
+4. **Streaming conversion** – The downloaded tarball is parsed as a stream:
+   - **OCI layout** (modern `docker save`): blobs are already content-addressed; large blobs stream directly into storage, only small JSON metadata is buffered. For multi-arch images, blobs of other platforms are pruned after platform selection.
+   - **Classic `docker save`**: layers are gzipped and hashed in memory (capped at ~96 MB total).
+5. **Storage** – Blobs and manifests are written to the transient edge cache (TTL) or R2 (durable).
+6. **Response** – Manifests and blobs are streamed to the Docker client, which assembles the image.
+
+---
+
+## 🗄 Cache Modes & Storage Layout
+
+| Mode | Store | Persistence | Cleanup |
+|------|-------|-------------|---------|
+| `CACHE_ENABLED=false` (default) | Cache API (edge) | Best-effort, per-PoP | Automatic TTL (`TRANSIENT_TTL_SECONDS`) |
+| `CACHE_ENABLED=true` | R2 bucket | Durable, global | Cron Trigger enforces `CACHE_MAX_SIZE` (oldest-uploaded blobs are removed first; R2 does not track last-access, so eviction is upload-order FIFO rather than true LRU) |
+
+R2 key layout:
+
+```
+blobs/sha256/<hex>      # layer and config blobs (streamed)
+manifests/<hex>         # manifest JSON (+ mediaType in custom metadata)
+tags/<repository>       # JSON map: tag → manifest digest
+origins/<repository>    # winning upstream registry (for debugging)
+```
+
+---
+
+## 🔌 API Endpoints (Docker Registry v2)
+
+- `GET /v2/` – Version check
+- `GET /v2/healthz` – Liveness probe
+- `GET /v2/<name>/manifests/<reference>` – Get manifest (tags and digests)
+- `HEAD /v2/<name>/manifests/<reference>` – Manifest metadata
+- `GET /v2/<name>/blobs/<digest>` – Get blob (layer); streamed from cache
+- `HEAD /v2/<name>/blobs/<digest>` – Check blob existence
+- `GET /v2/<name>/tags/list` – List tags (durable mode only; empty when caching is off)
+- `POST /v2/…/blobs/uploads/` – **501 Not Implemented** – this is a read-only proxy
+
+All other endpoints (push, delete, etc.) are **not** supported.
+
+---
+
+## 🐳 Usage Example
+
+Pull an image through the proxy:
+
+```bash
+docker pull localhost:8787/library/nginx:latest        # wrangler dev
+docker pull registry.sadhanet.com/library/nginx:latest  # deployed
+```
+
+Or use it as a mirror in your Docker daemon configuration:
+
+```json
+{
+  "registry-mirrors": ["https://registry.sadhanet.com"]
+}
+```
+
+---
+
+## ⚠️ Limitations & Considerations
+
+- **Push not supported** – Pull-through cache only.
+- **Source-service dependency** – The proxy cannot fetch directly from public registries; it relies on `SOURCE_BASE_URL`.
+- **Classic-format size cap** – Legacy (non-OCI) `docker save` tarballs are converted in memory; total buffered data is capped at ~96 MB per conversion. Modern OCI-layout tarballs (the default since Docker 25) stream without this limit.
+- **Workers limits** – CPU time and subrequest quotas depend on your plan; large images on the free tier's CPU budget may be slow. Blob responses are streamed, so memory stays bounded for OCI images.
+- **First pull latency** – The initial pull downloads and converts the tarball before responding.
+
+---
+
+## 🔧 Troubleshooting
+
+| Issue | Possible Solution |
+|-------|-------------------|
+| `404 MANIFEST_UNKNOWN` | The image doesn't exist in any configured registry — check the error details and `REGISTRIES_JSON`. |
+| `500 CONFIG_ERROR` | `CACHE_ENABLED=true` but the `REGISTRY_BUCKET` R2 binding is missing — enable it in `wrangler.jsonc`. |
+| `502`-like fetch failures | The source service (`SOURCE_BASE_URL`) is unreachable or returned an error. |
+| R2 cache doesn't shrink | Verify `CACHE_MAX_SIZE` is set and the `triggers.crons` block is uncommented; check the Cron Trigger logs. |
+| Slow first pull | Expected — conversion happens on first request; subsequent pulls are served from cache. |
+
+Debug with live logs:
+
+```bash
+npx wrangler tail
+```
 
 ---
 
 ## 🏠 Landing Page
 
-The proxy serves a self-contained landing page at `/` that documents how the project works. The UI is in **Persian (RTL)** and styled with the corporate palette (`#045F99`, `#1A1A1A`, `#092332`, `#E7F1FA`) plus the organization logo:
+The Worker serves a self-contained landing page at `/` that documents how the project works. The UI is in **Persian (RTL)** and styled with the corporate palette (`#045F99`, `#1A1A1A`, `#092332`, `#E7F1FA`) plus the organization logo:
 
 - **Hero with a live terminal demo** – shows a first pull (fetch, convert, cache) followed by a cached pull.
-- **Interactive pull simulator** – step through the request flow for a *cache miss* (registry fallback via the source service → tarball conversion → storage) or a *cache hit* (served straight from disk).
+- **Interactive pull simulator** – step through the request flow for a *cache miss* or *cache hit*.
 - **Feature grid, quick-start snippets** (with copy buttons), and the **API endpoint reference**.
 
-It lives in [`public/`](public/) as plain HTML, CSS, and JavaScript — no build step — and is served by Express via `express.static`, without interfering with the `/v2` API.
+It lives in [`public/`](public/) as plain HTML, CSS, and JavaScript — served by **Workers Static Assets** (no `express.static`).
 
 ```
 public/
@@ -126,125 +268,16 @@ Until the files exist, the page gracefully falls back to **Vazirmatn** (loaded f
 
 ---
 
-## 🔄 How It Works
-
-1. **Pull request** – Docker client sends a `GET /v2/<image>/manifests/<tag>` to the proxy.
-2. **Cache lookup** – The proxy checks if the manifest and all associated blobs exist in the cache.
-   - If **cached**, it serves the response immediately.
-   - If **not cached**, it proceeds to fetch from upstream.
-3. **Fetching** – The proxy queries each registry in `registries.json` sequentially, using `SOURCE_BASE_URL?name=<registry>/<image>:<tag>`.
-4. **Conversion** – The downloaded file (a `docker save` tarball) is extracted and converted into the standard registry v2 layout:
-   - Blobs are stored content‑addressed under `sha256:<digest>`.
-   - Manifests are indexed and saved.
-5. **Storage** – All data is written to `DATA_DIR` (or a temporary directory in transient mode).
-6. **Response** – The proxy serves the manifest and blob data to the Docker client, which then assembles the image.
-
----
-
-## 📁 Cache Directory Structure
-
-```
-DATA_DIR/
-├── blobs/
-│   └── sha256/               # Each blob file is named by its digest (without "sha256:")
-├── manifests/                # Manifest files (.json) and metadata (.meta)
-├── tags.json                 # Mapping of (repository, tag) → manifest digest
-└── origins.json              # Registry source for each image (for debugging)
-```
-
----
-
-## 🔌 API Endpoints (Docker Registry v2)
-
-The proxy implements the mandatory endpoints:
-
-- `GET /v2/` – Version check
-- `GET /v2/<name>/manifests/<reference>` – Get manifest (supports tags and digests)
-- `GET /v2/<name>/blobs/<digest>` – Get blob (layer)
-- `HEAD /v2/<name>/blobs/<digest>` – Check if blob exists
-- `GET /v2/<name>/tags/list` – List tags (optional, but implemented)
-
-All other endpoints (e.g., upload, delete) are **not** supported – this is a read‑only proxy.
-
----
-
-## 🧹 Cache Management
-
-- **Eviction policy** – LRU (Least Recently Used) based on file access time.
-- **Automatic cleanup** – Runs every `CACHE_CLEANUP_INTERVAL`; removes blobs until total size is below `CACHE_MAX_SIZE`.
-- **Manual cleanup** – Delete the `DATA_DIR` or individual files to reset the cache.
-
-In **transient mode** (`CACHE_ENABLED=false`), images are stored in `/tmp/registry-cache-<random>` and removed automatically after 30 minutes of inactivity.
-
----
-
-## 🐳 Usage Example
-
-Pull an image through the proxy:
-
-```bash
-docker pull registry.sadhanet.com/library/nginx:latest
-```
-
-You can also use it as a mirror in your Docker daemon configuration:
-
-```json
-{
-  "registry-mirrors": ["http://localhost:5000"]
-}
-```
-
----
-
-## ⚠️ Limitations & Considerations
-
-- **Push not supported** – This is a pull‑through cache only. You cannot push images to it.
-- **Dependency on source service** – The proxy cannot fetch images directly from public registries; it relies on `SOURCE_BASE_URL` to provide `docker save` output.
-- **Network latency** – The first pull of an image will be slower because it must download and convert the tarball.
-- **Disk space** – Ensure `DATA_DIR` has enough free space; otherwise, the cache cleanup may fail.
-
----
-
-## 🔧 Troubleshooting
-
-| Issue | Possible Solution |
-|-------|-------------------|
-| `404 Not Found` | Check that the image exists in at least one of the registries listed in `registries.json`. |
-| `502 Bad Gateway` | The source service (`SOURCE_BASE_URL`) is unreachable or returned an invalid response. |
-| Cache doesn't shrink | Verify `CACHE_MAX_SIZE` is set correctly and that cleanup interval is running. |
-| Docker client hangs | Ensure the proxy is reachable and that the Docker daemon is configured to use HTTP (not HTTPS) for local registries. |
-
-Enable debug logging by setting `LOG_LEVEL=debug` (if supported) or check the container logs:
-
-```bash
-docker logs -f <container-id>
-```
-
----
-
 ## 🤝 Contributing
 
-Contributions are welcome! Please open an issue or pull request for:
-
-- Bug fixes and performance improvements
-- Support for additional registry APIs
-- Better multi‑architecture handling
-- Enhanced cache algorithms
-
-Ensure your code passes the existing tests and follows the project's coding style.
+Contributions are welcome! Please open an issue or pull request for bug fixes, performance improvements, better multi-architecture handling, or enhanced cache strategies. Run `npm test` before submitting.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🙏 Acknowledgements
-
-Built with ❤️ using [Express](https://expressjs.com/), [node-fetch](https://github.com/node-fetch/node-fetch), and the Docker community.
-
----
-
-**Happy caching! 🚀**
+**Happy caching — now at the edge! 🚀**
