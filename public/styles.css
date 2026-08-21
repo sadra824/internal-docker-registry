@@ -412,6 +412,7 @@ a:hover {
     font-size: 1.06rem;
     max-width: 36em;
     margin-bottom: 1.8rem;
+    text-align: justify;
 }
 
 .hero-actions {
@@ -915,6 +916,8 @@ a:hover {
     height: 40px;
     width: auto;
     opacity: 0.95;
+    /* هاله‌ی روشن سازمانی دور لوگو */
+    filter: drop-shadow(0 0 6px rgba(231, 241, 250, 0.55)) drop-shadow(0 0 18px rgba(231, 241, 250, 0.25));
 }
 
 .footer-inner a {
