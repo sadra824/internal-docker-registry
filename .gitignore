@@ -3,3 +3,4 @@ node_modules/
 .mcp.json
 data/
 *.log
+__pycache__/
