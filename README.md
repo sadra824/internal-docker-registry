@@ -183,7 +183,7 @@ In **transient mode** (`CACHE_ENABLED=false`), images are stored in `/tmp/regist
 Pull an image through the proxy:
 
 ```bash
-docker pull localhost:5000/library/nginx:latest
+docker pull registry.sadhanet.com/library/nginx:latest
 ```
 
 You can also use it as a mirror in your Docker daemon configuration:
