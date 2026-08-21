@@ -1,5 +1,6 @@
 {
     // تنظیمات Cloudflare Workers — npx wrangler dev / npx wrangler deploy
+    // نام باید با ورکر پروداکشن (متصل به registry.sadhanet.com) یکی باشد
     "$schema": "node_modules/wrangler/config-schema.json",
     "name": "sadhanet-registry",
     "main": "src/index.js",
