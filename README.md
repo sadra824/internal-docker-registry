@@ -6,6 +6,7 @@ A lightweight, caching proxy for the Docker Registry API v2 that sits between yo
 
 ## ✨ Features
 
+- **Built-in landing page** – The root route (`/`) serves a small interactive landing page (plain HTML/CSS/JS, no dependencies) that explains how the proxy works, with a pull simulator, quick-start snippets, and the API reference. See [`public/`](public/).
 - **Docker Registry API v2 compliant** – Works seamlessly with `docker pull`, `docker build`, Kubernetes, and other container tools.
 - **Intelligent caching** – Stores blobs (layers) and manifests on disk with configurable size limits and automatic cleanup.
 - **Multi‑registry fallback** – Tries a prioritized list of upstream registries (`docker.io`, `ghcr.io`, `quay.io`, `gcr.io`, `mcr.microsoft.com`, etc.) until the image is found.
@@ -52,11 +53,10 @@ A lightweight, caching proxy for the Docker Registry API v2 that sits between yo
 ```bash
 git clone https://github.com/sadra824/internal-docker-registry.git
 cd internal-docker-registry
-git checkout dockerproxy-v2
 docker-compose up -d
 ```
 
-The proxy will be available at `http://localhost:5000`.
+The proxy will be available at `http://localhost:5000`. Opening it in a browser shows the built-in landing page (see below); `docker` clients talk to the same host on the `/v2` API.
 
 ### Manual Start (Node.js)
 
@@ -85,6 +85,44 @@ All settings are controlled via environment variables. See `.env.example` for a 
 | `NODE_ENV` | Set to `production` for optimized performance | `development` |
 
 > **Note:** The `registries.json` file contains the ordered list of upstream registries. You can modify it to add/remove/prioritize sources.
+
+---
+
+## 🏠 Landing Page
+
+The proxy serves a self-contained landing page at `/` that documents how the project works. The UI is in **Persian (RTL)** and styled with the corporate palette (`#045F99`, `#1A1A1A`, `#092332`, `#E7F1FA`) plus the organization logo:
+
+- **Hero with a live terminal demo** – shows a first pull (fetch, convert, cache) followed by a cached pull.
+- **Interactive pull simulator** – step through the request flow for a *cache miss* (registry fallback via the source service → tarball conversion → storage) or a *cache hit* (served straight from disk).
+- **Feature grid, quick-start snippets** (with copy buttons), and the **API endpoint reference**.
+
+It lives in [`public/`](public/) as plain HTML, CSS, and JavaScript — no build step — and is served by Express via `express.static`, without interfering with the `/v2` API.
+
+```
+public/
+├── index.html   # ساختار و محتوا (فارسی، راست‌به‌چپ)
+├── logo.svg     # لوگوی سازمان
+├── styles.css   # تم روشن با پالت سازمانی + تنظیمات فونت اختصاصی
+├── script.js    # انیمیشن ترمینال، شبیه‌ساز pull، دکمه‌های کپی
+└── fonts/       # فونت یکان بخ (YekanBakhFaNum-*.woff2) را اینجا بگذارید
+```
+
+### Custom brand font (YekanBakh)
+
+`styles.css` declares `@font-face` rules for the **YekanBakh** brand font. To enable it, drop the WOFF2 files into `public/fonts/` with these names — no code changes needed:
+
+| File | Weight |
+|------|--------|
+| `YekanBakhFaNum-Thin.woff2` | 100 |
+| `YekanBakhFaNum-Light.woff2` | 300 |
+| `YekanBakhFaNum-Regular.woff2` | 400 |
+| `YekanBakhFaNum-SemiBold.woff2` | 600 |
+| `YekanBakhFaNum-Bold.woff2` | 700 |
+| `YekanBakhFaNum-ExtraBold.woff2` | 800 |
+| `YekanBakhFaNum-Black.woff2` | 900 |
+| `YekanBakhFaNum-ExtraBlack.woff2` | 950 |
+
+Until the files exist, the page gracefully falls back to **Vazirmatn** (loaded from Google Fonts, with system-font fallbacks).
 
 ---
 

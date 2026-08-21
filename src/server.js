@@ -127,6 +127,14 @@ app.use((req, res, next) => {
     next();
 });
 
+// لندینگ پیج (توضیح نحوه کار پروژه) از ریشه سرو می‌شود
+app.use(
+    express.static(
+        path.join(__dirname, '..', 'public'),
+        { fallthrough: true }
+    )
+);
+
 app.use(
     '/v2',
     buildV2Router(store, {

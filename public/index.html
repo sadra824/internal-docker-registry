@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="رجیستری داخلی داکر — پروکسی کش سبک برای Docker Registry API نسخه 2">
+    <title>رجیستری داخلی داکر — پروکسی کش برای Docker Registry v2</title>
+    <link rel="icon" type="image/svg+xml" href="logo.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <a class="skip-link" href="#main">پرش به محتوا</a>
+
+    <header class="site-header">
+        <nav class="nav container" aria-label="ناوبری اصلی">
+            <a class="brand" href="#top">
+                <img class="brand-logo" src="logo.svg" alt="لوگوی سازمان">
+                <span>رجیستری داخلی داکر</span>
+            </a>
+            <ul class="nav-links">
+                <li><a href="#how-it-works">نحوه کار</a></li>
+                <li><a href="#features">امکانات</a></li>
+                <li><a href="#quick-start">شروع سریع</a></li>
+                <li><a href="#api">API</a></li>
+            </ul>
+            <a class="btn btn-outline btn-sm" href="https://github.com/sadra824/internal-docker-registry" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="icon-git">
+                    <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.17c-3.2.7-3.87-1.36-3.87-1.36-.53-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.78 1.05.78 2.12v3.14c0 .3.21.67.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/>
+                </svg>
+                گیت‌هاب
+            </a>
+        </nav>
+    </header>
+
+    <main id="main">
+        <!-- ============ هیرو ============ -->
+        <section class="hero" id="top">
+            <div class="container hero-grid">
+                <div class="hero-copy">
+                    <p class="eyebrow">
+                        <span class="pulse-dot" aria-hidden="true"></span>
+                        <span dir="ltr">Docker Registry API v2</span>
+                        · کش pull-through
+                    </p>
+                    <h1>میرور اختصاصی داکر، با <span class="accent">کشِ دیسکی</span> که هر pull سریع‌تر می‌شود</h1>
+                    <p class="lede">
+                        یک پروکسی سبک که بین <code>docker pull</code> و رجیستری‌های عمومی قرار می‌گیرد.
+                        اولین pull ایمیج را از طریق سرویس منبع دریافت و روی دیسک کش می‌کند —
+                        بقیه pullها محلی سرو می‌شوند؛ با تأخیر کم و بدون مصرف دوباره پهنای‌باند.
+                    </p>
+                    <div class="hero-actions">
+                        <a class="btn btn-primary" href="#quick-start">
+                            شروع سریع
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="icon-sm flip-rtl">
+                                <path d="M5 12h14M13 6l6 6-6 6"/>
+                            </svg>
+                        </a>
+                        <a class="btn btn-ghost" href="#how-it-works">نحوه کار را ببینید</a>
+                    </div>
+                    <dl class="hero-stats">
+                        <div><dt>API نسخه ۲</dt><dd>بدون هیچ تغییری برای docker ،podman و Kubernetes</dd></div>
+                        <div><dt>۱۳ رجیستری</dt><dd dir="ltr">docker.io ،ghcr ،quay ،gcr و…</dd></div>
+                        <div><dt>کش LRU</dt><dd>محدود به حجم مشخص، با پاک‌سازی خودکار</dd></div>
+                    </dl>
+                </div>
+
+                <div class="hero-terminal" aria-label="نمایش ترمینال">
+                    <div class="terminal-bar">
+                        <span class="dot red" aria-hidden="true"></span>
+                        <span class="dot yellow" aria-hidden="true"></span>
+                        <span class="dot green" aria-hidden="true"></span>
+                        <span class="terminal-title" dir="ltr">docker — bash</span>
+                    </div>
+                    <pre class="terminal-body" id="hero-terminal" tabindex="0" aria-label="دموی ترمینال: دریافت nginx از طریق پروکسی. اولین pull دانلود و تبدیل می‌شود؛ pull دوم از کش سرو می‌شود."><code><span class="t-prompt">$</span> <span class="t-cmd" id="type-target">docker pull localhost:5000/library/nginx:latest</span>
+<span class="t-dim">latest: Pulling from library/nginx</span>
+<span class="t-dim">a8e4797c4b53: Pull complete</span>
+<span class="t-dim">6e2ca3bab02: Pull complete</span>
+<span class="t-dim">[fetch] docker.io/library/nginx:latest — converted &amp; cached</span>
+<span class="t-ok">Status: Downloaded newer image ✓</span>
+
+<span class="t-prompt">$</span> <span class="t-cmd">docker pull localhost:5000/library/nginx:latest</span>
+<span class="t-dim">[cache] manifest + blobs served from disk</span>
+<span class="t-ok">Status: Image is up to date ✓ (much faster)</span></code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ نحوه کار ============ -->
+        <section class="section" id="how-it-works">
+            <div class="container">
+                <div class="section-head">
+                    <h2>نحوه کار</h2>
+                    <p>هر <code>docker pull</code> از طریق پروکسی این مسیر را طی می‌کند. برای دیدن حرکت درخواست، دکمه شبیه‌سازی را بزنید.</p>
+                </div>
+
+                <div class="sim-controls">
+                    <div class="segmented" role="group" aria-label="انتخاب سناریوی pull">
+                        <button type="button" class="seg-btn" data-scenario="cold" aria-pressed="false">اولین pull <span class="seg-tag">کش miss</span></button>
+                        <button type="button" class="seg-btn" data-scenario="warm" aria-pressed="true">pullهای بعدی <span class="seg-tag">کش hit</span></button>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" id="sim-run">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="icon-sm">
+                            <polygon points="6 4 20 12 6 20 6 4" stroke-linejoin="round"/>
+                        </svg>
+                        شبیه‌سازی یک pull
+                    </button>
+                </div>
+
+                <div class="flow" id="flow">
+                    <ol class="flow-steps" aria-label="مسیر درخواست">
+                        <li class="flow-step" data-step="1">
+                            <span class="step-no" aria-hidden="true">۱</span>
+                            <div class="step-body">
+                                <h3>کلاینت داکر</h3>
+                                <p><code>docker pull localhost:5000/library/nginx:latest</code> — پروکسی همان پروتکل استاندارد Registry v2 را صحبت می‌کند؛ پس کلاینت نیازی به تغییر ندارد.</p>
+                            </div>
+                        </li>
+                        <li class="flow-step" data-step="2">
+                            <span class="step-no" aria-hidden="true">۲</span>
+                            <div class="step-body">
+                                <h3>بررسی کش دیسک</h3>
+                                <p>جست‌وجوی منیفست و blobها در <code>DATA_DIR</code>، با کلید digestهای <code>sha256</code> و به‌صورت content-addressed.</p>
+                            </div>
+                        </li>
+                    </ol>
+                    <div class="flow-branch" aria-live="polite">
+                        <div class="branch branch-hit" data-branch="warm">
+                            <div class="branch-badge hit">کش hit</div>
+                            <ol class="flow-steps">
+                                <li class="flow-step" data-step="3w">
+                                    <span class="step-no" aria-hidden="true">۳</span>
+                                    <div class="step-body">
+                                        <h3>سرو از دیسک محلی</h3>
+                                        <p>منیفست و لایه‌ها مستقیم از کش استریم می‌شوند — بدون ترافیک خارجی، با تأخیر در حد شبکه محلی.</p>
+                                    </div>
+                                </li>
+                            </ol>
+                        </div>
+                        <div class="branch branch-miss" data-branch="cold">
+                            <div class="branch-badge miss">کش miss</div>
+                            <ol class="flow-steps">
+                                <li class="flow-step" data-step="3c">
+                                    <span class="step-no" aria-hidden="true">۳</span>
+                                    <div class="step-body">
+                                        <h3>دریافت از طریق سرویس منبع</h3>
+                                        <p>پروکسی همه رجیستری‌های <code>registries.json</code> را به‌صورت موازی از طریق <code>dockerimagesave.akiel.dev</code> امتحان می‌کند — اولین جواب برنده است.</p>
+                                    </div>
+                                </li>
+                                <li class="flow-step" data-step="4c">
+                                    <span class="step-no" aria-hidden="true">۴</span>
+                                    <div class="step-body">
+                                        <h3>تبدیل و ذخیره</h3>
+                                        <p>خروجی tarball مربوط به <code>docker save</code> باز می‌شود، به blobها و منیفست‌های content-addressed تبدیل و در کش نوشته می‌شود.</p>
+                                    </div>
+                                </li>
+                                <li class="flow-step" data-step="5c">
+                                    <span class="step-no" aria-hidden="true">۵</span>
+                                    <div class="step-body">
+                                        <h3>پاسخ به کلاینت</h3>
+                                        <p>داکر تصویر را از منیفست و blobها — دقیقاً مثل یک رجیستری معمولی — می‌سازد.</p>
+                                    </div>
+                                </li>
+                            </ol>
+                        </div>
+                    </div>
+                    <p class="flow-note">کش خودش را هم تمیز می‌کند: حذفِ LRU مقدار <code>DATA_DIR</code> را هر <code>CACHE_CLEANUP_INTERVAL</code> زیر <code>CACHE_MAX_SIZE</code> نگه می‌دارد.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ امکانات ============ -->
+        <section class="section section-alt" id="features">
+            <div class="container">
+                <div class="section-head">
+                    <h2>امکانات</h2>
+                    <p>هر چیزی که از یک میرور رجیستری کوچک و self-hosted انتظار دارید.</p>
+                </div>
+                <ul class="feature-grid">
+                    <li class="feature-card">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M22 12.5c0 2.4-4.5 4.3-10 4.3S2 14.9 2 12.5V9h20v3.5Z"/><path d="M22 9c0 2-4.5 3.7-10 3.7S2 11 2 9s4.5-3.7 10-3.7S22 7 22 9Z"/>
+                        </svg>
+                        <h3>سازگار با Registry v2</h3>
+                        <p>بدون هیچ تنظیمی با <code>docker pull</code>، <code>docker build</code>، میرورهای Kubernetes و هر کلاینت OCI کار می‌کند.</p>
+                    </li>
+                    <li class="feature-card">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>
+                        </svg>
+                        <h3>کش دیسکی با حذف LRU</h3>
+                        <p>blobها و منیفست‌ها به‌صورت content-addressed ذخیره می‌شوند. با پر شدن <code>CACHE_MAX_SIZE</code>، کم‌استفاده‌ترین داده‌ها اول حذف می‌شوند.</p>
+                    </li>
+                    <li class="feature-card">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M4 7h11M4 12h11M4 17h7"/><path d="M18 5v14M21 8l-3-3-3 3"/>
+                        </svg>
+                        <h3>fallback روی چند رجیستری</h3>
+                        <p>۱۳ منبع بالادستی — docker.io ،ghcr.io ،quay.io ،gcr.io ،mcr.microsoft.com، آروان‌کلود و… — به‌صورت موازی امتحان می‌شوند؛ اولین موفق برنده است.</p>
+                    </li>
+                    <li class="feature-card">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/>
+                        </svg>
+                        <h3>پشتیبانی چندمعماری</h3>
+                        <p>نسخه پلتفرم مناسب میزبان با <code>DEFAULT_PLATFORM_OS</code>/<code>ARCH</code> انتخاب می‌شود (پیش‌فرض <code>linux/amd64</code>).</p>
+                    </li>
+                    <li class="feature-card">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/>
+                        </svg>
+                        <h3>تبدیل در لحظه</h3>
+                        <p>tarballهای <code>docker save</code> و OCI layoutها به‌صورت خودکار باز و به ساختار استاندارد رجیستری باز‌بسته‌بندی می‌شوند.</p>
+                    </li>
+                    <li class="feature-card">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/>
+                        </svg>
+                        <h3>سبک + حالت موقت</h3>
+                        <p>Node.js و Express با حداقل منابع. با <code>CACHE_ENABLED=false</code> کش موقتی ساخته می‌شود که بعد از ۳۰ دقیقه بی‌فعالیت خودش حذف می‌شود.</p>
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- ============ شروع سریع ============ -->
+        <section class="section" id="quick-start">
+            <div class="container">
+                <div class="section-head">
+                    <h2>شروع سریع</h2>
+                    <p>در کمتر از یک دقیقه بالا می‌آید — با داکر یا Node.js.</p>
+                </div>
+                <div class="qs-grid">
+                    <div class="code-card">
+                        <div class="code-head">
+                            <span dir="ltr">Docker Compose</span>
+                            <button type="button" class="copy-btn" data-copy="git clone https://github.com/sadra824/internal-docker-registry.git&#10;cd internal-docker-registry&#10;docker-compose up -d">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="icon-sm"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                کپی
+                            </button>
+                        </div>
+<pre class="code-body"><code>git clone https://github.com/sadra824/internal-docker-registry.git
+cd internal-docker-registry
+docker-compose up -d
+
+<span class="c-dim"># دریافت هر ایمیج عمومی از طریق پروکسی:</span>
+docker pull localhost:5000/library/nginx:latest</code></pre>
+                    </div>
+                    <div class="code-card">
+                        <div class="code-head">
+                            <span dir="ltr">Node.js ≥ 18</span>
+                            <button type="button" class="copy-btn" data-copy="npm install&#10;cp .env.example .env&#10;npm start">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="icon-sm"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                کپی
+                            </button>
+                        </div>
+<pre class="code-body"><code>npm install
+cp .env.example .env   <span class="c-dim"># در صورت نیاز تنظیم کنید</span>
+npm start              <span class="c-dim"># روی پورت :5000 بالا می‌آید</span></code></pre>
+                    </div>
+                    <div class="code-card qs-wide">
+                        <div class="code-head">
+                            <span>استفاده به‌عنوان registry mirror (اختیاری)</span>
+                            <button type="button" class="copy-btn" data-copy='{ "registry-mirrors": ["http://localhost:5000"] }'>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="icon-sm"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                کپی
+                            </button>
+                        </div>
+<pre class="code-body"><code><span class="c-dim"># در /etc/docker/daemon.json — همه pullهای داکر به‌صورت شفاف کش می‌شوند:</span>
+{
+  "registry-mirrors": ["http://localhost:5000"]
+}</code></pre>
+                    </div>
+                </div>
+                <p class="qs-note">سپس <a href="http://localhost:5000" target="_blank" rel="noopener" dir="ltr">http://localhost:5000</a> را باز کنید — همین صفحه توسط خودِ پروکسی سرو می‌شود.</p>
+            </div>
+        </section>
+
+        <!-- ============ API ============ -->
+        <section class="section section-alt" id="api">
+            <div class="container">
+                <div class="section-head">
+                    <h2>دستورهای API</h2>
+                    <p>سطح الزامی Registry v2 — فقط‌خواندنی (push پاسخ <code>501</code> می‌گیرد).</p>
+                </div>
+                <div class="table-wrap">
+                    <table class="api-table">
+                        <thead>
+                            <tr><th scope="col">دستور</th><th scope="col">کاربرد</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>GET /v2/</code></td><td>بررسی نسخه</td></tr>
+                            <tr><td><code>GET /v2/&lt;name&gt;/manifests/&lt;ref&gt;</code></td><td>دریافت منیفست (تگ یا digest)</td></tr>
+                            <tr><td><code>GET /v2/&lt;name&gt;/blobs/&lt;digest&gt;</code></td><td>دریافت blob / لایه</td></tr>
+                            <tr><td><code>HEAD /v2/&lt;name&gt;/blobs/&lt;digest&gt;</code></td><td>بررسی وجود blob</td></tr>
+                            <tr><td><code>GET /v2/&lt;name&gt;/tags/list</code></td><td>فهرست تگ‌های کش‌شده</td></tr>
+                            <tr><td><code>POST /v2/…/blobs/uploads/</code></td><td>پشتیبانی نمی‌شود — فقط pull</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-inner">
+            <img class="footer-logo" src="logo.svg" alt="" aria-hidden="true">
+            <p>ساخته‌شده با Node.js و Express · مجوز MIT</p>
+            <a dir="ltr" href="https://github.com/sadra824/internal-docker-registry" target="_blank" rel="noopener">sadra824/internal-docker-registry</a>
+        </div>
+    </footer>
+
+    <script src="script.js" defer></script>
+</body>
+</html>

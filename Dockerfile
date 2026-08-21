@@ -8,6 +8,7 @@ RUN npm install --omit=dev
 
 # بقیه سورس
 COPY src ./src
+COPY public ./public
 
 # مسیر پیش‌فرض کش داده‌ها داخل کانتینر (روی یک ولوم maple می‌شه)
 ENV DATA_DIR=/app/data
