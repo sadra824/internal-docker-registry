@@ -5,7 +5,10 @@
 
 - **مجوز:** Apache License 2.0 — فایل [LICENSE](./LICENSE) مربوط به پروژه‌ی بالادستی است.
 - **نسخه:** main @ a73605d (2026-08-17)
-- تغییرات نسبت به بالادست: هیچ (دست‌نخورده vendor شده است)
+- تغییرات نسبت به بالادست:
+  1. `src/registry/http.ts` (تابع `authenticate`): scope همیشه از خود namespace ساخته
+     می‌شود، نه از چالشِ جانگهدارِ endpoint ریشه‌ی `/v2/` — بدون این پچ، fallback
+     روی ghcr.io با DENIED شکست می‌خورد (scope دو بار wrap می‌شد).
 - وابستگی‌ها در `package.json` ریشه نصب می‌شوند: itty-router ،zod ،rfc4648 ،@tsndr/cloudflare-worker-jwt
 
 نحوه‌ی استفاده در این پروژه: `src/index.js` درخواست‌های `/v2/*` را به

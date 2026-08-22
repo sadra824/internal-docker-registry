@@ -293,7 +293,14 @@ export class RegistryHTTPClient implements Registry {
     }
 
     const authCtx = authHeaderIntoAuthContext(this.url, authenticateHeader);
-    if (!authCtx.scope) authCtx.scope = namespace;
+    // PATCH (sadhanet): the WWW-Authenticate challenge from the /v2/ ROOT
+    // endpoint carries a generic placeholder scope (e.g. ghcr.io answers with
+    // scope="repository:user/image:pull" there). Trusting it caused
+    // authenticateBearer() to double-wrap the scope into
+    // "repository:repository:user/image:pull:pull,push", which token servers
+    // deny — making every ghcr.io fallback fail. Like the Docker client,
+    // always request the scope of the repository we actually want.
+    authCtx.scope = namespace;
     switch (authCtx.authType) {
       case "bearer":
         return await this.authenticateBearer(authCtx);
