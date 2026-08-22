@@ -338,7 +338,12 @@ export class RegistryHTTPClient implements Registry {
     const params = new URLSearchParams({
       service: ctx.service,
       // explicitely include that we don't want an offline_token.
-      scope: `repository:${ctx.scope}:pull,push`,
+      // PATCH (sadhanet): request pull-only scope. Asking for "pull,push"
+      // makes anonymous token servers deny the whole request — ghcr.io
+      // answers 403 DENIED and gcr.io reports missing uploadArtifacts
+      // permission. This proxy never pushes upstream, so "pull" is all
+      // we need (same as the Docker client does when pulling).
+      scope: `repository:${ctx.scope}:pull`,
       client_id: "r2registry",
       grant_type: this.configuration.username === undefined ? "none" : "password",
       password: this.configuration.username === undefined ? "" : this.password(),

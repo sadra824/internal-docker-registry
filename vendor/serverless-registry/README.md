@@ -9,6 +9,9 @@
   1. `src/registry/http.ts` (تابع `authenticate`): scope همیشه از خود namespace ساخته
      می‌شود، نه از چالشِ جانگهدارِ endpoint ریشه‌ی `/v2/` — بدون این پچ، fallback
      روی ghcr.io با DENIED شکست می‌خورد (scope دو بار wrap می‌شد).
+  2. `src/registry/http.ts` (تابع `authenticateBearer`): scope توکن فقط `pull`
+     است (به‌جای `pull,push`) — سرورهای توکن ناشناس (ghcr ،gcr و…) درخواستِ
+     push را کامل رد می‌کنند و این پراکسی هرگز push به بالادست ندارد.
 - وابستگی‌ها در `package.json` ریشه نصب می‌شوند: itty-router ،zod ،rfc4648 ،@tsndr/cloudflare-worker-jwt
 
 نحوه‌ی استفاده در این پروژه: `src/index.js` درخواست‌های `/v2/*` را به
