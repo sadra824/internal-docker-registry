@@ -14,8 +14,10 @@
 
 import { requestWithLibraryPrefix } from '../lib/repository-name.js';
 import { notFound, readOnlyUnsupported } from '../lib/http.js';
+import { logger } from '../lib/log.js';
 
 const READ_METHODS = new Set(['GET', 'HEAD']);
+const log = logger('registry');
 
 /**
  * @param {object} deps
@@ -27,6 +29,10 @@ const READ_METHODS = new Set(['GET', 'HEAD']);
 export function createRegistryRoute({ v2Router, registryClient, bucket, InternalError }) {
     return async function registryRoute(request, env, ctx) {
         if (!READ_METHODS.has(request.method)) {
+            log.warn('write rejected (read-only)', {
+                method: request.method,
+                path: new URL(request.url).pathname
+            });
             return readOnlyUnsupported();
         }
 
@@ -34,14 +40,28 @@ export function createRegistryRoute({ v2Router, registryClient, bucket, Internal
         env.REGISTRY_CLIENT = registryClient;
 
         try {
-            const res = await v2Router.fetch(requestWithLibraryPrefix(request), env, ctx);
-            return res instanceof Response ? res : notFound();
+            const normalized = requestWithLibraryPrefix(request);
+            const res = await v2Router.fetch(normalized, env, ctx);
+
+            if (!(res instanceof Response)) {
+                log.warn('router returned no response → 404', {
+                    path: new URL(normalized.url).pathname
+                });
+                return notFound();
+            }
+
+            return res;
         } catch (err) {
             if (err instanceof Response) {
-                console.warn(`${request.method} ${err.status} ${err.url}`);
+                // روتر گاهی برای کنترل جریان Response پرتاب می‌کند
+                log.warn('router threw a response', { status: err.status, url: err.url });
                 return err;
             }
-            console.error('registry router error:', err);
+            log.error('router error', {
+                path: new URL(request.url).pathname,
+                error: err?.message,
+                stack: err?.stack?.split('\n').slice(0, 3).join(' | ')
+            });
             return new InternalError();
         }
     };

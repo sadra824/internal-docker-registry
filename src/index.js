@@ -7,6 +7,9 @@
  *                    از سرویس منبع — مناسب wget -c | docker load)
  *  ۳) بقیه          → لندینگ را Static Assets خود پلتفرم می‌دهد؛
  *                    هر چیز دیگر 404
+ *
+ * لاگ: هر درخواست (متد/مسیر/وضعیت/مدت) + سطح با env.LOG_LEVEL.
+ * هیچ استثنایی از fetch بیرون نمی‌رود — آخرین شبکه‌ی ایمن 500 برمی‌گرداند.
  */
 
 import v2Router from '../vendor/serverless-registry/src/router.ts';
@@ -16,12 +19,15 @@ import { createPassthroughRouter } from './routes/passthrough.js';
 import { NoCacheRegistry, emptyBucket } from './registry/no-cache.js';
 import { getRegistries } from './services/registries.js';
 import { notFound, internalError } from './lib/http.js';
+import { logger, setLogLevel } from './lib/log.js';
 
 const PATHS = {
     registryApi: '/v2',
     image: '/image',
     platforms: '/platforms'
 };
+
+const log = logger('worker');
 
 // stateless هستند؛ یک بار در سطح isolate ساخته می‌شوند
 const registryRoute = createRegistryRoute({
@@ -48,23 +54,52 @@ function buildPassthroughRoute(env) {
     });
 }
 
+/** dispatch + لاگ هر درخواست (متد، مسیر، وضعیت، مدت) */
+async function dispatch(request, env, ctx) {
+    const startedAt = Date.now();
+    const { pathname } = new URL(request.url);
+    const described = `${request.method} ${pathname}`;
+
+    let response;
+    try {
+        if (pathname === PATHS.registryApi || pathname.startsWith(`${PATHS.registryApi}/`)) {
+            response = await registryRoute(request, env, ctx);
+        } else if (pathname === PATHS.image || pathname === PATHS.platforms) {
+            response = await buildPassthroughRoute(env)(request);
+        } else {
+            response = notFound();
+        }
+    } catch (err) {
+        // خطای پیش‌بینی‌نشده — هیچ استثنایی نباید از fetch بیرون برود
+        log.error('unhandled error', { request: described, error: err?.message });
+        response = internalError();
+    }
+
+    log.info('request', {
+        request: described,
+        status: response.status,
+        ms: Date.now() - startedAt
+    });
+
+    return response;
+}
+
+let configuredEnv = null;
+
 export default {
     async fetch(request, env, ctx) {
-        const { pathname } = new URL(request.url);
-
-        if (pathname === PATHS.registryApi || pathname.startsWith(`${PATHS.registryApi}/`)) {
-            return registryRoute(request, env, ctx);
+        // تنظیم سطح لاگ یک بار به‌ازای هر env (env در طول عمر isolate ثابت است)
+        if (configuredEnv !== env) {
+            setLogLevel(env.LOG_LEVEL);
+            configuredEnv = env;
         }
 
-        if (pathname === PATHS.image || pathname === PATHS.platforms) {
-            try {
-                return await buildPassthroughRoute(env)(request);
-            } catch (err) {
-                console.error('passthrough error:', err);
-                return internalError();
-            }
+        try {
+            return await dispatch(request, env, ctx);
+        } catch (err) {
+            // حتی اگر خود dispatch (مثلاً new URL) شکست بخورد
+            log.error('dispatch failed', { error: err?.message });
+            return internalError();
         }
-
-        return notFound();
     }
 };

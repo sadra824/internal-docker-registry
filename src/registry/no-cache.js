@@ -20,6 +20,10 @@
  */
 
 import { readOnlyUnsupported } from '../lib/http.js';
+import { logger } from '../lib/log.js';
+
+/** لاگ سطح debug برای دنبال‌کردن جریان (با env.LOG_LEVEL=debug فعال می‌شود) */
+const log = logger('no-cache');
 
 /** خطای اینترفیس Registry — همان قرارداد {response} روتر serverless-registry */
 function registryError(status, code, message) {
@@ -84,6 +88,7 @@ export class NoCacheRegistry {
     // ---------- نوشتن‌های داخلی روتر (بعد از fallback): no-op ----------
 
     async putManifest(namespace, reference, stream) {
+        log.debug('putManifest discarded (no storage)', { repository: namespace, reference });
         await discardStream(stream);
         return {
             digest: `sha256:${'0'.repeat(64)}`,
@@ -92,6 +97,7 @@ export class NoCacheRegistry {
     }
 
     async monolithicUpload(_namespace, digest, stream) {
+        log.debug('monolithicUpload discarded (no storage)', { digest });
         await discardStream(stream);
         return { digest, location: '/' };
     }

@@ -20,6 +20,7 @@
  */
 
 import { httpError } from '../lib/http.js';
+import { logger } from '../lib/log.js';
 
 const FORWARDED_RESPONSE_HEADERS = [
     'Content-Type',
@@ -45,13 +46,15 @@ export function createPassthroughRouter({
     fetchRaw,
     sourceBaseUrl = 'https://dockerimagesave.akiel.dev/image'
 }) {
+    const log = logger('passthrough');
+
     function buildTarget(kind, ref, platform) {
         const base = kind === 'platforms'
             ? new URL(sourceBaseUrl).origin + '/platforms'
             : sourceBaseUrl;
 
         const query = new URLSearchParams({ name: ref });
-        for (const key of ['os', 'arch', 'variant']) {
+        for (const key of PLATFORM_KEYS) {
             if (platform[key]) query.set(key, platform[key]);
         }
 
@@ -74,28 +77,45 @@ export function createPassthroughRouter({
             if (value) platform[key] = value;
         }
 
-        // اگر کاربر خودش رجیستری را مشخص کرده، فقط همان‌جا
-        const refs = kind === 'platforms' || looksLikeRegistryHost(name)
-            ? [name]
-            : getRegistries().map((registry) => `${registry}/${name}`);
+        // لیست مقصدها — خطای پیکربندی این‌جا جدا از خطای اجرا گزارش می‌شود
+        let refs;
+        try {
+            // اگر کاربر خودش رجیستری را مشخص کرده، فقط همان‌جا
+            refs = kind === 'platforms' || looksLikeRegistryHost(name)
+                ? [name]
+                : getRegistries().map((registry) => `${registry}/${name}`);
+        } catch (err) {
+            log.error('config error', { error: err.message });
+            return httpError(500, 'CONFIG_ERROR', err.message);
+        }
 
         const failures = [];
 
         for (const ref of refs) {
             const target = buildTarget(kind, ref, platform);
+            const startedAt = Date.now();
 
             let upstream;
             try {
                 upstream = await fetchRaw(target, request);
             } catch (err) {
+                log.warn('upstream fetch failed', { ref, error: err.message });
                 failures.push(`${ref}: ${err.message}`);
                 continue;
             }
 
             if (!upstream.ok) {
+                log.info('upstream miss', { ref, status: upstream.status, ms: Date.now() - startedAt });
                 failures.push(`${ref}: HTTP ${upstream.status}`);
                 continue;
             }
+
+            log.info('upstream hit — streaming', {
+                ref,
+                status: upstream.status,
+                bytes: upstream.headers.get('Content-Length') ?? 'unknown',
+                ms: Date.now() - startedAt
+            });
 
             // هدرهای مرتبط با دانلود را پاس بده — همین.
             const headers = {};
@@ -116,6 +136,8 @@ export function createPassthroughRouter({
                 headers
             });
         }
+
+        log.warn('all upstreams failed', { name, attempts: refs.length });
 
         return httpError(
             502,

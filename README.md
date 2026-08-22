@@ -96,6 +96,7 @@ npm test
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `LOG_LEVEL` | Log verbosity: `debug` / `info` / `warn` / `error` — view with `npx wrangler tail` | `info` |
 | `REGISTRIES_JSON` | `/v2` pull-through upstream list — `[{"registry":"https://index.docker.io/", "username"?:…, "password_env"?:…}]` | set in `wrangler.jsonc` (12 anonymous registries) |
 | `PASSTHROUGH_REGISTRIES_JSON` | `/image` upstream hostnames | built-in list of 13 |
 | `SOURCE_BASE_URL` | Source service for `/image` | `https://dockerimagesave.akiel.dev/image` |
