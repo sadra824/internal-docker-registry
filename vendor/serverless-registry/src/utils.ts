@@ -1,0 +1,77 @@
+import { base64url } from "rfc4648";
+import { prettifyError, ZodError } from "zod";
+
+export async function readableToBlob(
+  reader: ReadableStreamDefaultReader,
+  ...multiwriters: WritableStreamDefaultWriter[]
+): Promise<Blob> {
+  const blobs = [];
+  while (true) {
+    const value = await reader.read();
+    if (value.done) break;
+    blobs.push(value.value);
+    const promises = [];
+    for (const writer of multiwriters) {
+      promises.push(writer.write(value.value));
+    }
+
+    await Promise.all(promises);
+  }
+
+  return new Blob(blobs);
+}
+
+export async function readerToBlob(readaleStream: ReadableStream, ...multiwriters: WritableStreamDefaultWriter[]) {
+  const reader = readaleStream.getReader();
+  const blobs = [];
+  while (true) {
+    const value = await reader.read();
+    if (value.done) break;
+    blobs.push(value.value);
+    const promises = [];
+    for (const writer of multiwriters) {
+      promises.push(writer.write(value.value));
+    }
+
+    await Promise.all(promises);
+  }
+
+  return new Blob(blobs);
+}
+
+export async function consumeReadable(reader: ReadableStreamDefaultReader) {
+  while (true) {
+    const value = await reader.read();
+    if (value.done) break;
+  }
+}
+
+export function errorString(err: unknown): string {
+  if (err instanceof ZodError) {
+    return `zod error:\n${prettifyError(err)}`;
+  }
+
+  if (err instanceof Error) {
+    return `error ${err.name}: ${err.message}: ${err.cause}: ${err.stack}`;
+  }
+
+  return "unknown error: " + JSON.stringify(err);
+}
+
+export async function wrap<T, E = unknown>(fn: Promise<T>): Promise<[T, null] | [null, E]> {
+  return fn.then((data) => [data, null] as [T, null]).catch((err) => [null, err as unknown as E] as [null, E]);
+}
+
+export function jsonHeaders(): { "content-type": "application/json" } {
+  return { "content-type": "application/json" };
+}
+
+const textDecoder = new TextDecoder();
+
+export function base64UrlDecode(s: string): string {
+  return textDecoder.decode(base64url.parse(s, { loose: true }));
+}
+
+export function base64UrlEncode(s: string): string {
+  return Buffer.from(s, "utf8").toString("base64url");
+}

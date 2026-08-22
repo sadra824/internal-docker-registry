@@ -1,0 +1,10 @@
+# نمونه‌ی متغیرهای محیطی برای اجرای محلی (npx wrangler dev)
+# این فایل را به .dev.vars کپی کنید و مقادیر را پر کنید (gitignored است)
+
+# احراز هویت رجیستری برای /v2 — الزامی
+USERNAME=hello
+PASSWORD=world
+
+# اختیاری — دسترسی فقط‌خواندنی
+# READONLY_USERNAME=readonly
+# READONLY_PASSWORD=readonly

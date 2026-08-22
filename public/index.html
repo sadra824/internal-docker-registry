@@ -92,15 +92,17 @@
                         <span class="terminal-title" dir="ltr">docker — bash</span>
                     </div>
                     <pre class="terminal-body" id="hero-terminal" tabindex="0"
-                        aria-label="دموی ترمینال: دریافت nginx با docker pull مستقیم از رجیستری؛ روش دوم دانلود ادامه‌پذیر با wget و بارگذاری با docker load."><code><span class="t-prompt">$</span> <span class="t-cmd" id="type-target">docker pull registry.sadhanet.com/library/nginx:latest</span>
+                        aria-label="دموی ترمینال: ورود به رجیستری با docker login و سپس دریافت nginx با docker pull؛ روش دوم دانلود ادامه‌پذیر با wget و بارگذاری با docker load."><code><span class="t-prompt">$</span> <span class="t-cmd" id="type-target">docker login registry.sadhanet.com</span>
+<span class="t-dim">Username: sadra   Password: ••••••••</span>
+<span class="t-ok">Login Succeeded ✓</span>
+
+<span class="t-prompt">$</span> <span class="t-cmd">docker pull registry.sadhanet.com/library/nginx:latest</span>
 <span class="t-dim">latest: Pulling from library/nginx</span>
 <span class="t-dim">a8e4797c4b53: Pull complete</span>
-<span class="t-dim">6e2ca3bab02: Pull complete</span>
 <span class="t-ok">Status: Downloaded newer image ✓</span>
 
 <span class="t-prompt">$</span> <span class="t-cmd">wget -c --content-disposition "https://registry.sadhanet.com/image?name=redis:7"</span>
 <span class="t-dim">redis_7.tar  100%[==================&gt;]  118.20M  9.8MB/s</span>
-<span class="t-dim"># قابل ادامه: اگر قطع شد، همان دستور دوباره از همان‌جا ادامه می‌دهد</span>
 <span class="t-ok">docker load -i redis_7.tar ✓</span></code></pre>
                 </div>
             </div>
@@ -153,8 +155,9 @@
                             </div>
                         </li>
                     </ol>
-                    <p class="flow-note">هیچ داده‌ای روی سرور نگه داشته نمی‌شود؛ دانلودهای نیمه‌تمام با
-                        <code>wget -c</code> از همان‌جایی که قطع شده ادامه می‌یابند.
+                    <p class="flow-note">pullها با احراز هویت انجام می‌شوند (<code>docker login</code>) و ایمیج‌ها
+                        در R2 نگه داشته می‌شوند تا دفعات بعد فوری سرو شوند؛ دانلودهای نیمه‌تمام <code>wget -c</code>
+                        هم از همان‌جا ادامه می‌یابند.
                     </p>
                 </div>
             </div>
@@ -195,8 +198,9 @@
                             <path d="M22 9c0 2-4.5 3.7-10 3.7S2 11 2 9s4.5-3.7 10-3.7S22 7 22 9Z" />
                         </svg>
                         <h3>docker pull مستقیم</h3>
-                        <p>کلاینت‌های سازگار با Registry v2 — docker ،podman و Kubernetes — بدون هیچ تغییری
-                            مستقیماً از همین آدرس pull می‌کنند؛ منیفست در لحظه و بدون پردازش سنگین ساخته می‌شود.</p>
+                        <p>کلاینت‌های سازگار با Registry v2 — docker ،podman و Kubernetes — بعد از یک
+                            <code>docker login</code> مستقیماً از همین آدرس pull می‌کنند؛ ایمیج‌های عمومی با
+                            fallback خودکار در R2 نگه‌داری می‌شوند.</p>
                     </li>
                     <li class="feature-card">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -253,7 +257,7 @@
                         <div class="code-head">
                             <span>راه‌اندازی (Self-host)</span>
                             <button type="button" class="copy-btn"
-                                data-copy="git clone https://github.com/sadra824/internal-docker-registry.git&#10;cd internal-docker-registry&#10;npm install&#10;npm start">
+                                data-copy="git clone https://github.com/sadra824/internal-docker-registry.git&#10;cd internal-docker-registry&#10;npm install&#10;npm start&#10;docker login localhost:5000 -u hello -p world&#10;docker pull localhost:5000/library/nginx:latest">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="icon-sm">
                                     <rect x="9" y="9" width="12" height="12" rx="2" />
@@ -267,7 +271,8 @@ cd internal-docker-registry
 npm install
 npm start             <span class="c-dim"># روی پورت :5000 بالا می‌آید</span>
 
-<span class="c-dim"># دریافت هر ایمیج عمومی از طریق رجیستری:</span>
+<span class="c-dim"># ورود و دریافت (credentialها در .dev.vars):</span>
+docker login localhost:5000 -u hello -p world
 docker pull localhost:5000/library/nginx:latest</code></pre>
                     </div>
                     <div class="code-card">
@@ -349,7 +354,7 @@ curl "https://registry.sadhanet.com/platforms?name=nginx:latest"</code></pre>
                             </tr>
                             <tr>
                                 <td><code>/v2/…</code></td>
-                                <td>API کاملِ سازگار با Registry v2 برای <code>docker pull</code> مستقیم — استریمی و بدون ذخیره‌سازی</td>
+                                <td>API کاملِ Registry v2 برای <code>docker pull</code> مستقیم (بک‌اند: serverless-registry) — با احراز هویت و نگه‌داری در R2</td>
                             </tr>
                         </tbody>
                     </table>

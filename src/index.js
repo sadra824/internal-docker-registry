@@ -1,43 +1,22 @@
 /**
- * نقطه‌ی ورود Worker — حالت «استریم مستقیم»:
+ * نقطه‌ی ورود Worker — ترکیب سه بخش:
  *
- *  - بدون ذخیره‌سازی: هیچ داده‌ای روی Cache/R2/دیسک نوشته نمی‌شود
- *  - بدون پردازش سنگین: منیفست فقط از متادیتای کوچک tarball ساخته
- *    می‌شود و لایه‌ها بایت‌به‌بایت پاس داده می‌شوند (CPU ≈ صفر؛ مناسب
- *    حتی پلن رایگان با سقف ۱۰ms)
- *  - فقط متادیتای چند‌کیلوبایتی (tag → منیفست) تا ۱۰ دقیقه در حافظه‌ی
- *    isolate نگه داشته می‌شود تا درخواست‌های بعدی همان pull سریع باشند
- *  - پلتفرم (os/arch) به‌صورت پارامتر query به سرویس منبع پاس داده می‌شود
+ *  ۱) /v2/…  → بک‌اند رسمی serverless-registry کلاودفلر (vendor شده در
+ *     vendor/serverless-registry — Apache-2.0):
+ *       - رجیستری کامل OCI روی R2 (push و pull)
+ *       - احراز هویت (USERNAME/PASSWORD یا JWT) — بدون credential پاسخ 401 می‌دهد
+ *       - pull fallback: اگر ایمیج در R2 نباشد، از رجیستری‌های بالادستی
+ *         (REGISTRIES_JSON) گرفته و در R2 ذخیره می‌شود؛ pullهای بعدی مستقیم از R2
+ *
+ *  ۲) /image و /platforms → دانلود مستقیم تاربال از سرویس منبع
+ *     (استریم خالص، بدون ذخیره‌سازی — مناسب wget -c | docker load)
+ *
+ *  ۳) / → لندینگ پیج (Static Assets خود پلتفرم)
  */
 
-import { createV2Router } from './routes/v2.js';
+import registryBackend from '../vendor/serverless-registry/index.ts';
 import { createPassthroughRouter } from './routes/passthrough.js';
 import { getRegistries } from './services/registries.js';
-import { fetchTarball } from './services/fetcher.js';
-
-// روتر در سطح isolate ساخته می‌شود تا حافظه‌ی tag→منیفست بین درخواست‌ها مشترک بماند
-let cachedRouter = null;
-let cachedRouterEnv = null;
-
-function getRouter(env) {
-    if (cachedRouter && cachedRouterEnv === env) {
-        return cachedRouter;
-    }
-
-    cachedRouter = createV2Router({
-        getRegistries: () => getRegistries(env),
-        fetchTarball: (imageRef) => fetchTarball(imageRef, {
-            sourceBaseUrl: env.SOURCE_BASE_URL,
-            timeoutMs: Number(env.FETCH_TIMEOUT_MS || 120000),
-            os: env.DEFAULT_PLATFORM_OS,
-            arch: env.DEFAULT_PLATFORM_ARCH,
-            variant: env.DEFAULT_PLATFORM_VARIANT
-        })
-    });
-
-    cachedRouterEnv = env;
-    return cachedRouter;
-}
 
 function notFound() {
     return Response.json(
@@ -65,30 +44,17 @@ function getPassthroughRouter(env) {
 
 export default {
     async fetch(request, env, ctx) {
-        void ctx;
-
         const url = new URL(request.url);
 
-        // دانلود مستقیم تاربال (wget | docker load) — استریم خالص، CPU ≈ صفر
-        if (
-            url.pathname === '/image'
-            || url.pathname === '/platforms'
-        ) {
-            try {
-                return await getPassthroughRouter(env)(request);
-            } catch (err) {
-                return Response.json(
-                    { errors: [{ code: 'INTERNAL_ERROR', message: 'خطای داخلی سرور' }] },
-                    { status: 500 }
-                );
-            }
+        // بک‌اند رجیستری — همه‌ی مسیرهای /v2 را به serverless-registry می‌دهیم
+        if (url.pathname === '/v2' || url.pathname.startsWith('/v2/')) {
+            return registryBackend.fetch(request, env, ctx);
         }
 
-        if (url.pathname === '/v2' || url.pathname.startsWith('/v2/')) {
+        // دانلود مستقیم تاربال (wget | docker load) — استریم خالص
+        if (url.pathname === '/image' || url.pathname === '/platforms') {
             try {
-                const router = getRouter(env);
-                const response = await router(request);
-                return response || notFound();
+                return await getPassthroughRouter(env)(request);
             } catch (err) {
                 return Response.json(
                     { errors: [{ code: 'INTERNAL_ERROR', message: 'خطای داخلی سرور' }] },

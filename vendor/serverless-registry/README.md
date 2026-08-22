@@ -1,0 +1,16 @@
+# serverless-registry (vendored)
+
+این پوشه حاوی کد پروژه‌ی رسمی [cloudflare/serverless-registry](https://github.com/cloudflare/serverless-registry)
+است که به‌عنوان بک‌اند Docker Registry API (`/v2/…`) این ریپو استفاده می‌شود.
+
+- **مجوز:** Apache License 2.0 — فایل [LICENSE](./LICENSE) مربوط به پروژه‌ی بالادستی است.
+- **نسخه:** main @ a73605d (2026-08-17)
+- تغییرات نسبت به بالادست: هیچ (دست‌نخورده vendor شده است)
+- وابستگی‌ها در `package.json` ریشه نصب می‌شوند: itty-router ،zod ،rfc4648 ،@tsndr/cloudflare-worker-jwt
+
+نحوه‌ی استفاده در این پروژه: `src/index.js` درخواست‌های `/v2/*` را به
+`index.ts` همین پوشه واگذار می‌کند (با binding ر2 به نام `REGISTRY`).
+
+پیکربندی fallback از متغیر محیطی `REGISTRIES_JSON` (فرمت خود پروژه‌ی بالادستی)
+خوانده می‌شود:
+`[{"registry":"https://index.docker.io/"}]`

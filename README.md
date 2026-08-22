@@ -1,64 +1,52 @@
-# Sadhanet Docker Registry — on Cloudflare Workers
+# Sadhanet Docker Registry
 
-A lightweight image-distribution service that runs on **Cloudflare Workers** and sits between your Docker tooling and upstream registries. Two modes are available, **both storage-free and near-zero CPU** (they run comfortably on the Workers **free plan**):
+A private container registry on **Cloudflare Workers**, with two ways to get images:
 
-- **Direct download:** `GET /image?name=nginx:latest` streams the `docker save` tarball straight from the source service to the client — no storage, no processing, resume-friendly (`wget -c`). Load it with `docker load`.
-- **Registry v2 API (`/v2/…`):** full manifest/blob compatibility for `docker pull`, `podman`, Kubernetes mirrors, etc. The manifest is assembled from the tarball's small metadata only (digests are embedded in the OCI blob paths), and layers are piped through byte-by-byte — no hashing, no buffering, no storage.
+- **`/v2/…` — the registry itself.** Powered by [cloudflare/serverless-registry](https://github.com/cloudflare/serverless-registry) (vendored under `vendor/serverless-registry/`, Apache-2.0): full OCI distribution support (pull **and** push) on top of **R2**, with username/password or JWT authentication, and **pull-through fallback** — if an image isn't in R2 yet, it is fetched from a configured upstream registry (e.g. Docker Hub / ArvanCloud) and stored, so the next pull is served straight from R2.
+- **`/image?name=…` — direct download.** Streams the `docker save` tarball from the source service (`dockerimagesave.akiel.dev`) straight to the client with zero processing — resumable with `wget -c`, loadable with `docker load`, no storage involved. Registry fallback across 13 upstreams is built in, plus `GET /platforms?name=…` for listing available platforms.
 
-> **Nothing is stored.** No disk, no Cache API, no R2, no cron. Only a few kilobytes of manifest metadata are kept in isolate memory for ~10 minutes so the requests of a single `docker pull` don't refetch the manifest.
+> No custom caching layer anywhere: `/v2` uses R2 as its storage (that's the registry itself, not a cache), and `/image` stores nothing at all.
 
 ---
 
 ## ✨ Features
 
-- **Direct pass-through downloads** – `GET /image?name=…` streams the tarball straight to the client with zero processing and zero storage; `Range` requests (`wget -c`) supported for resumable downloads. Runs comfortably on the free plan.
-- **Docker Registry API v2 compliant** – Works seamlessly with `docker pull`, `docker build`, Kubernetes, and other container tools — manifest built on the fly from tarball metadata, layers streamed through untouched.
-- **Runs on Cloudflare Workers** – No permanent server, no infrastructure to manage; every request executes at the edge. No `fs`, no `listen`, no `setInterval`.
-- **Storage-free by design** – Nothing is written anywhere; per-isolate manifest metadata (a few KB, 10-minute TTL) is the only state.
-- **Multi‑registry fallback** – Tries a prioritized list of upstream registries (`docker.arvancloud.ir`, `docker.io`, `ghcr.io`, `quay.io`, `gcr.io`, `mcr.microsoft.com`, …) in order; the first success wins.
-- **Multi‑architecture support** – Selects the platform via `os`/`arch`/`variant` (query params on `/image`, `DEFAULT_PLATFORM_*` vars for `/v2`; default: `linux/amd64`). `GET /platforms?name=…` lists what an image supports.
-- **Built-in landing page** – The root route serves an interactive landing page as Workers Static Assets (see [`public/`](public/)).
+- **Full Registry v2 API** – `docker pull` / `docker push` / `_catalog` / referrers — the vendored serverless-registry handles it all.
+- **Pull-through fallback** – `REGISTRIES_JSON` lists upstream registries (anonymous or authenticated); missing images are fetched once and kept in R2.
+- **Authentication** – `USERNAME`/`PASSWORD` (plus optional read-only credentials) or JWT public key; requests without credentials get `401`.
+- **Direct pass-through downloads** – `GET /image?name=…` with `Range`/`wget -c` resume support; `GET /platforms?name=…`.
+- **Multi‑registry fallback** – 13 upstreams tried in order (`docker.arvancloud.ir`, `docker.io`, `ghcr.io`, `quay.io`, `gcr.io`, `mcr.microsoft.com`, …).
+- **Multi‑architecture** – `os`/`arch`/`variant` selection on both paths.
+- **Built-in landing page** – Persian/RTL, corporate palette, served as Workers Static Assets.
 
 ---
 
-## 🏗 Architecture Overview
+## 🏗 Architecture
 
 ```
-┌─────────────────┐        ┌────────────────────────────┐
-│  Docker Client  │ ─────► │   Cloudflare Worker        │
-│  (pull / wget)  │ ◄───── │   src/index.js (fetch)     │
-└─────────────────┘        │   ├─ routes/v2.js          │
-                           │   ├─ routes/passthrough.js │
-                           │   ├─ services/registry.js  │
-                           │   ├─ services/tarscan.js   │
-                           │   └─ services/fetcher.js   │
-                           └───────────┬────────────────┘
-                                       │
-                            ┌──────────▼───────────┐
-                            │  Source Service      │
-                            │  dockerimagesave     │
-                            │  .akiel.dev          │
-                            └──────────────────────┘
-```
+┌─────────────────┐   /v2/*   ┌──────────────────────────────┐     ┌─────────────┐
+│  Docker Client  │ ────────► │ vendor/serverless-registry   │ ──► │ R2 bucket   │
+│  (login/pull)   │ ◄──────── │ (auth + OCI dist API)        │ ◄── │ (storage)   │
+└─────────────────┘           └───────────┬──────────────────┘     └─────────────┘
+                                          │ on miss: pull-through
+                                          ▼
+                              upstream registries (fallback list)
 
-Project layout:
+┌─────────────────┐  /image   ┌──────────────────────────────┐
+│  wget / curl    │ ────────► │ src/routes/passthrough.js    │ ──► source service
+│  (docker load)  │ ◄──────── │ (zero-CPU stream, resume)    │ ◄── (dockerimagesave)
+└─────────────────┘           └──────────────────────────────┘
+```
 
 ```
 src/
-├── index.js               ← Worker entry
-├── routes/
-│   ├── v2.js              ← Docker Registry v2 API (streaming, storage-free)
-│   └── passthrough.js     ← GET /image + /platforms (zero-CPU pass-through)
-├── services/
-│   ├── registry.js        ← manifest from tarball metadata; blob piping
-│   ├── tarscan.js         ← zero-copy streaming tar scanner
-│   ├── fetcher.js         ← source service download (streaming)
-│   └── registries.js      ← upstream registry list
-└── utils/
-    └── sha256.js          ← WebCrypto digest helpers (small buffers only)
+├── index.js               ← entry: /v2 → vendored registry, /image → passthrough
+├── routes/passthrough.js  ← GET /image + /platforms
+└── services/registries.js ← upstream list for /image
 
-public/                    ← landing page (Workers Static Assets)
-tests/                     ← node --test unit tests
+vendor/serverless-registry/  ← cloudflare/serverless-registry (Apache-2.0, unmodified)
+public/                      ← landing page (Static Assets)
+tests/                       ← node --test unit tests
 ```
 
 ---
@@ -67,41 +55,46 @@ tests/                     ← node --test unit tests
 
 ### Prerequisites
 
-- Node.js ≥ 18 (for `wrangler` and the test suite)
-- A Cloudflare account (free tier works)
-- Network access from Workers to the source service and upstream registries
+- Node.js ≥ 18 (for `wrangler` and tests)
+- A Cloudflare account. **Note:** R2 requires billing info on the account even on its free tier (10 GB storage, 1 M writes, 10 M reads per month — enough for a personal registry at no cost).
 
-### Run locally
+### 1. Create the R2 bucket
 
 ```bash
-git clone https://github.com/sadra824/internal-docker-registry.git
-cd internal-docker-registry
+npx wrangler r2 bucket create sadhanet-registry
+```
+
+### 2. Set registry credentials (required — otherwise every /v2 request gets 401)
+
+```bash
+npx wrangler secret put USERNAME
+npx wrangler secret put PASSWORD
+# optional read-only credentials:
+npx wrangler secret put READONLY_USERNAME
+npx wrangler secret put READONLY_PASSWORD
+```
+
+### 3. Run / deploy
+
+```bash
 npm install
-npx wrangler dev
-```
-
-The proxy is now at `http://localhost:8787`:
-
-```bash
-docker pull localhost:8787/library/nginx:latest
-```
-
-Opening `http://localhost:8787` in a browser shows the built-in landing page.
-
-### Deploy
-
-```bash
-npx wrangler login
+npm start          # local dev on :5000 (credentials via .dev.vars)
 npx wrangler deploy
 ```
 
-The Worker gets a `*.workers.dev` URL; attach a custom domain (Workers → Settings → Domains & Routes) and pull through it, e.g. `docker pull registry.sadhanet.com/library/nginx:latest`.
+### 4. Use it
 
-### Enable durable caching (R2)
+```bash
+docker login registry.sadhanet.com -u <USERNAME> -p <PASSWORD>
+docker pull registry.sadhanet.com/library/nginx:latest   # first pull fetches & stores in R2
+docker pull registry.sadhanet.com/library/nginx:latest   # next pull: straight from R2
 
-Not applicable — this service stores nothing (see below). If you ever need a durable pull-through cache, R2 support can be reintroduced, but the current design is deliberately storage-free for near-zero CPU on the free plan.
+# or the storage-free direct download:
+wget -c --content-disposition "https://registry.sadhanet.com/image?name=redis:7"
+docker load -i redis_7.tar
+```
 
-### Run tests
+### Tests
 
 ```bash
 npm test
@@ -111,164 +104,44 @@ npm test
 
 ## ⚙️ Configuration
 
-All settings come from Worker environment variables (Vars in `wrangler.jsonc`, or the dashboard) — read via `env.X`, not `process.env`.
-
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `SOURCE_BASE_URL` | Source service endpoint for downloading images | `https://dockerimagesave.akiel.dev/image` |
-| `DEFAULT_PLATFORM_OS` | Default OS for multi‑arch images (`/v2` mode) | `linux` |
-| `DEFAULT_PLATFORM_ARCH` | Default architecture (`/v2` mode) | `amd64` |
-| `DEFAULT_PLATFORM_VARIANT` | Default variant, e.g. `v7` (`/v2` mode, optional) | — |
-| `REGISTRIES_JSON` | JSON array overriding the upstream registry list | built-in list |
-| `FETCH_TIMEOUT_MS` | Timeout for source-service fetches | `120000` |
+| `USERNAME` / `PASSWORD` | Registry credentials (secrets; **required** for `/v2`) | — |
+| `READONLY_USERNAME` / `READONLY_PASSWORD` | Optional read-only credentials | — |
+| `JWT_REGISTRY_TOKENS_PUBLIC_KEY` | Optional JWT auth (base64 public key) | — |
+| `REGISTRIES_JSON` | `/v2` pull-through fallback list — `[{"registry":"https://index.docker.io/", "username"?:…, "password_env"?:…}]` | set in `wrangler.jsonc` (ArvanCloud + Docker Hub, anonymous) |
+| `PASSTHROUGH_REGISTRIES_JSON` | `/image` upstream hostnames | built-in list of 13 |
+| `SOURCE_BASE_URL` | Source service for `/image` | `https://dockerimagesave.akiel.dev/image` |
 
----
-
-## 🔄 How It Works
-
-### `/v2` mode (docker pull)
-
-1. **Manifest request** – The Docker client sends `GET /v2/<image>/manifests/<tag>`. The Worker fetches the tarball from the source service (registries tried in order) and reads **only its small metadata**: `manifest.json` plus each member's tar header (name + size). Reading stops as soon as everything needed is seen.
-2. **Manifest assembly** – Because the tarball is OCI-layout, every blob's digest is embedded in its path (`blobs/sha256/<hex>`). The v2 manifest (config + layer descriptors with real digests/sizes) is assembled in milliseconds — no hashing, no layer buffering.
-3. **Blob requests** – For each layer, Docker sends `GET /v2/<image>/blobs/<digest>`. Response headers go out immediately (no client-side timeout risk) and the layer's bytes are **piped through byte-by-byte** from the source tarball — zero-copy, no storage. The tag↔manifest mapping (a few KB) is kept in isolate memory for 10 minutes so blob requests know which reference to fetch.
-4. **Deduplication** – Concurrent identical manifest requests share one fetch per isolate.
-
-### `/image` mode (wget | docker load)
-
-`GET /image?name=nginx:latest` (with optional `os`/`arch`/`variant`) proxies the source service directly: headers are forwarded (including `Content-Disposition` and `Range` for `wget -c` resume) and the tarball streams straight through. `GET /platforms?name=…` lists the available platforms of an image.
+See [`wrangler.jsonc`](wrangler.jsonc) for inline comments; upstream docs for [serverless-registry](https://github.com/cloudflare/serverless-registry) cover the registry-specific options in depth.
 
 ---
 
 ## 🔌 API Endpoints
 
-### Direct download (recommended — free-plan friendly)
+**Registry (v2):** `GET /v2/`, `GET /v2/_catalog`, `GET|HEAD|PUT|DELETE /v2/<name>/manifests/<ref>`, `GET|HEAD /v2/<name>/blobs/<digest>`, `POST|PATCH|PUT /v2/<name>/blobs/uploads/…`, referrers — all authenticated.
 
-- `GET /image?name=<ref>` – Stream the image tarball (`docker save` format) directly to the client; pass-through, resumable via `Range`/`wget -c`
-- `GET /image?name=<ref>&os=linux&arch=arm64&variant=v8` – Select a specific platform (default `linux/amd64`)
-- `GET /platforms?name=<ref>` – List available platforms for an image
-
-```bash
-# stream straight into docker:
-wget -q -O - "https://registry.example.com/image?name=nginx:latest" | docker load
-
-# resumable download, then load:
-wget -c --content-disposition "https://registry.example.com/image?name=nginx:latest"
-docker load -i nginx_latest.tar
-```
-
-If `name` starts with a registry host (e.g. `ghcr.io/owner/img:tag`), only that registry is used; otherwise registries are tried in order and the first success wins.
-
-### Docker Registry v2 (heavier — needs CPU headroom for large images)
-
-- `GET /v2/` – Version check
-- `GET /v2/healthz` – Liveness probe
-- `GET /v2/<name>/manifests/<reference>` – Get manifest (tags and digests)
-- `HEAD /v2/<name>/manifests/<reference>` – Manifest metadata
-- `GET /v2/<name>/blobs/<digest>` – Get blob (layer); piped through from the source tarball
-- `HEAD /v2/<name>/blobs/<digest>` – Check blob existence
-- `GET /v2/<name>/tags/list` – List tags (always empty — nothing is stored)
-- `POST /v2/…/blobs/uploads/` – **501 Not Implemented** – this is a read-only proxy
-
-All other endpoints (push, delete, etc.) are **not** supported.
-
----
-
-## 🐳 Usage Example
-
-Pull an image through the proxy:
-
-```bash
-docker pull localhost:8787/library/nginx:latest        # wrangler dev
-docker pull registry.sadhanet.com/library/nginx:latest  # deployed
-```
-
-Or use it as a mirror in your Docker daemon configuration:
-
-```json
-{
-  "registry-mirrors": ["https://registry.sadhanet.com"]
-}
-```
+**Direct download:** `GET /image?name=<ref>[&os=&arch=&variant=]`, `GET /platforms?name=<ref>`, `Range` requests for resume.
 
 ---
 
 ## ⚠️ Limitations & Considerations
 
-- **Push not supported** – Pull-through only.
-- **Source-service dependency** – The proxy cannot fetch directly from public registries; it relies on `SOURCE_BASE_URL`.
-- **OCI layout only** – The `/v2` mode reads digests from `blobs/sha256/<hex>` paths; classic (pre-Docker-25) `docker save` tarballs are rejected with a clear error. The `/image` mode works with any format since it passes bytes through untouched.
-- **Per-blob source fetches** – Without storage, every blob request re-downloads the source tarball (headers are answered immediately; bytes stream through). Bandwidth-heavy but CPU-free; the source service must tolerate it.
-- **Isolate memory scope** – The tag↔manifest memo lives per isolate (~10 min). If an isolate recycles between manifest and blob requests, the blob returns 404 and the pull restarts — docker handles this gracefully on retry.
-- **Subrequest/CPU quotas** – Both modes are near-zero CPU and work on the free plan; very large images may still take a while because the source service itself builds the tarball.
-
----
-
-## 🔧 Troubleshooting
-
-| Issue | Possible Solution |
-|-------|-------------------|
-| `404 MANIFEST_UNKNOWN` | The image doesn't exist in any configured registry — check the error details and `REGISTRIES_JSON`. |
-| `500 CONFIG_ERROR` | Check the error message — usually a malformed `REGISTRIES_JSON`. |
-| `502`-like fetch failures | The source service (`SOURCE_BASE_URL`) is unreachable or returned an error. |
-| Blob 404 after isolate recycle | Expected occasionally — nothing is stored; retry the pull and the manifest is re-fetched. |
-| Slow first pull | Expected — the source service must build the tarball on first request; bytes then stream through. Subsequent pulls reuse docker's local layer cache. |
-
-Debug with live logs:
-
-```bash
-npx wrangler tail
-```
+- **Auth is mandatory on `/v2`** — `docker login` before `docker pull` (this is a *private* registry).
+- **R2 storage grows** as images are pulled through; the free tier covers 10 GB, and serverless-registry ships an [experimental garbage collector](https://github.com/cloudflare/serverless-registry/tree/main/docs) for cleanup.
+- **Push layer cap** — layers up to ~500 MB per request (Workers body-size limit); see the upstream `push/` tooling for larger layers.
+- **Docker Hub rate limits** — anonymous fallback pulls share quota; set `username`/`password_env` in `REGISTRIES_JSON` to avoid them.
+- `/image` depends on `SOURCE_BASE_URL` being reachable.
 
 ---
 
 ## 🏠 Landing Page
 
-The Worker serves a self-contained landing page at `/` that documents how the project works. The UI is in **Persian (RTL)** and styled with the corporate palette (`#045F99`, `#1A1A1A`, `#092332`, `#E7F1FA`) plus the organization logo:
-
-- **Hero with a live terminal demo** – shows docker pull plus a resumable wget | docker load download.
-- **Interactive download simulator** – step through the request flow (registry fallback, direct streaming).
-- **Feature grid, quick-start snippets** (with copy buttons), and the **API endpoint reference**.
-
-It lives in [`public/`](public/) as plain HTML, CSS, and JavaScript — served by **Workers Static Assets** (no `express.static`).
-
-```
-public/
-├── index.html   # ساختار و محتوا (فارسی، راست‌به‌چپ)
-├── logo.svg     # لوگوی سازمان
-├── styles.css   # تم روشن با پالت سازمانی + تنظیمات فونت اختصاصی
-├── script.js    # انیمیشن ترمینال، شبیه‌ساز pull، دکمه‌های کپی
-└── fonts/       # فونت یکان بخ (YekanBakhFaNum-*.woff2) را اینجا بگذارید
-```
-
-### Custom brand font (YekanBakh)
-
-`styles.css` declares `@font-face` rules for the **YekanBakh** brand font. To enable it, drop the WOFF2 files into `public/fonts/` with these names — no code changes needed:
-
-| File | Weight |
-|------|--------|
-| `YekanBakhFaNum-Thin.woff2` | 100 |
-| `YekanBakhFaNum-Light.woff2` | 300 |
-| `YekanBakhFaNum-Regular.woff2` | 400 |
-| `YekanBakhFaNum-SemiBold.woff2` | 600 |
-| `YekanBakhFaNum-Bold.woff2` | 700 |
-| `YekanBakhFaNum-ExtraBold.woff2` | 800 |
-| `YekanBakhFaNum-Black.woff2` | 900 |
-| `YekanBakhFaNum-ExtraBlack.woff2` | 950 |
-
-Until the files exist, the page gracefully falls back to **Vazirmatn** (loaded from Google Fonts, with system-font fallbacks).
+The Worker serves a self-contained landing page at `/` (Persian/RTL, corporate palette `#045F99`/`#1A1A1A`/`#092332`/`#E7F1FA`, YekanBakh font in `public/fonts/`). It documents the pull and direct-download flows interactively. See [`public/`](public/).
 
 ---
 
-## 🤝 Contributing
+## 📄 Licenses
 
-Contributions are welcome! Please open an issue or pull request for bug fixes, performance improvements, better multi-architecture handling, or storage-free distribution improvements. Run `npm test` before submitting.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
----
-
-**Happy caching — now at the edge! 🚀**
+- This repository: MIT.
+- [`vendor/serverless-registry/`](vendor/serverless-registry/): Apache License 2.0 — © Cloudflare, unmodified vendored copy of [cloudflare/serverless-registry](https://github.com/cloudflare/serverless-registry).
