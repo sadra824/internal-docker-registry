@@ -15,8 +15,7 @@
  */
 
 import v2Router from '../vendor/serverless-registry/src/router.ts';
-import { AuthErrorResponse, InternalError } from '../vendor/serverless-registry/src/errors.ts';
-import { authenticationMethodFromEnv } from '../vendor/serverless-registry/src/authentication-method.ts';
+import { InternalError } from '../vendor/serverless-registry/src/errors.ts';
 import { NoCacheRegistry, emptyBucket } from './registry-nocache.js';
 import { createPassthroughRouter } from './routes/passthrough.js';
 import { getRegistries } from './services/registries.js';
@@ -44,23 +43,31 @@ function readOnlyGate(method) {
     );
 }
 
-/** هندلر /v2 — همان جریان index.ts پروژه‌ی بالادستی، ولی با رجیستری بدون ذخیره */
+/**
+ * نرمال‌سازی نام — دقیقاً مثل کاری که خود docker برای Docker Hub می‌کند:
+ * نام‌های تک‌بخشی (مثل nginx) به library/nginx تبدیل می‌شوند؛ چون
+ * رجیستری‌های Hub/Mirror بدون پیشوند library ایمیج رسمی را پیدا نمی‌کنند.
+ * نام‌های دارای slash (مثل sadra824/img یا ghcr.io/owner/img) و مسیرهای
+ * رزروشده با _ (مثل _catalog) دست‌نخورده می‌مانند.
+ */
+function normalizeRequest(request) {
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    const match = path.match(/^(\/v2\/)([^/_][^/]*)((?:\/(?:manifests|blobs|tags)\/.+|\/tags\/list)?)$/);
+    if (!match) {
+        return request;
+    }
+
+    url.pathname = `${match[1]}library/${match[2]}${match[3]}`;
+    return new Request(url.toString(), request);
+}
+
+/** هندلر /v2 — بدون احراز هویت (pull ناشناس)، بدون ذخیره‌سازی، فقط pull */
 async function handleRegistry(request, env, ctx) {
     const gate = readOnlyGate(request.method);
     if (gate) {
         return gate;
-    }
-
-    // بدون credential، همه‌چیز 401 (مطابق رفتار serverless-registry)
-    const authMethod = await authenticationMethodFromEnv(env);
-    if (!authMethod) {
-        return new AuthErrorResponse(request);
-    }
-
-    const credentials = await authMethod.checkCredentials(request);
-    if (!credentials.verified) {
-        console.warn(`Not Authorized. authmode=${authMethod.authmode}. verified=false`);
-        return new AuthErrorResponse(request);
     }
 
     // قلب تغییر: به‌جای R2Registry، پیاده‌سازی بدون ذخیره + bucket خالی
@@ -68,7 +75,8 @@ async function handleRegistry(request, env, ctx) {
     env.REGISTRY_CLIENT = new NoCacheRegistry();
 
     try {
-        return await v2Router.fetch(request, env, ctx);
+        const res = await v2Router.fetch(normalizeRequest(request), env, ctx);
+        return res instanceof Response ? res : notFound();
     } catch (err) {
         if (err instanceof Response) {
             console.warn(`${request.method} ${err.status} ${err.url}`);

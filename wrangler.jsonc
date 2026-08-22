@@ -20,21 +20,18 @@
     "vars": {
         "SOURCE_BASE_URL": "https://dockerimagesave.akiel.dev/image",
 
-        // بک‌اند /v2 (serverless-registry) — رجیستری‌های بالادستی:
+        // بک‌اند /v2 (serverless-registry) — رجیستری‌های بالادستی ناشناس:
         // هر pull به‌ترتیب از این‌ها گرفته و مستقیم به کلاینت پاس داده می‌شود.
-        // فرمت: [{ "registry": "<url>", "username"?: "...", "password_env"?: "..." }]
-        // توکن/رمز را هرگز این‌جا ننویسید — با wrangler secret put تنظیم کنید.
-        "REGISTRIES_JSON": "[{ \"registry\": \"https://docker.arvancloud.ir/\" }, { \"registry\": \"https://index.docker.io/\" }]"
+        // برای رجیستری خصوصی: username و password_env اضافه کنید و توکن را با
+        // wrangler secret put تنظیم کنید (هرگز توکن را این‌جا ننویسید).
+        "REGISTRIES_JSON": "[{ \"registry\": \"https://docker.arvancloud.ir/\" },{ \"registry\": \"https://index.docker.io/\" },{ \"registry\": \"https://ghcr.io/\" },{ \"registry\": \"https://registry.k8s.io/\" },{ \"registry\": \"https://quay.io/\" },{ \"registry\": \"https://gcr.io/\" },{ \"registry\": \"https://public.ecr.aws/\" },{ \"registry\": \"https://mcr.microsoft.com/\" },{ \"registry\": \"https://registry.gitlab.com/\" },{ \"registry\": \"https://nvcr.io/\" },{ \"registry\": \"https://icr.io/\" },{ \"registry\": \"https://registry.cn-hangzhou.aliyuncs.com/\" }]"
     }
 
-    // ─── احراز هویت رجیستری (الزامی برای /v2) ───
-    // serverless-registry بدون credential همه‌ی درخواست‌ها را 401 می‌کند:
-    //   npx wrangler secret put USERNAME
-    //   npx wrangler secret put PASSWORD
-    // (اختیاری برای دسترسی فقط‌خواندنی: READONLY_USERNAME / READONLY_PASSWORD)
-    // سپس:  docker login registry.sadhanet.com -u USERNAME -p PASSWORD
-    //
-    // برای اجرای محلی، همین مقادیر را در فایل .dev.vars بگذارید (نمونه: .dev.vars.example)
+    // ⚠️ احراز هویت حذف شده — pull کاملاً ناشناس است.
+    // secretهای USERNAME/PASSWORD اگر قبلاً set شده‌اند دیگر اثری ندارند؛
+    // برای تمیزی می‌توانید حذفشان کنید:
+    //   npx wrangler secret delete USERNAME
+    //   npx wrangler secret delete PASSWORD
 
     // ─── فهرست رجیستری‌های مسیر /image (اختیاری) ───
     // پیش‌فرض: همان ۱۳ رجیستری داخل src/services/registries.js
