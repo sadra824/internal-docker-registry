@@ -41,9 +41,14 @@ A private container registry on **Cloudflare Workers**, with two ways to get ima
 
 ```
 src/
-├── index.js               ← entry: /v2 → vendored registry, /image → passthrough
-├── registry-nocache.js    ← storage-free Registry + empty-bucket shim
-├── routes/passthrough.js  ← GET /image + /platforms
+├── index.js               ← entry: route table + dependency wiring only
+├── routes/
+│   ├── registry.js        ← /v2 handler (read-only gate, name normalization, delegation)
+│   └── passthrough.js     ← GET /image + /platforms
+├── registry/no-cache.js   ← storage-free Registry + empty-bucket shim
+├── lib/
+│   ├── http.js            ← shared error responses (JSON error format)
+│   └── repository-name.js ← pure nginx → library/nginx normalization
 └── services/registries.js ← upstream list for /image
 
 vendor/serverless-registry/  ← cloudflare/serverless-registry (Apache-2.0, unmodified)

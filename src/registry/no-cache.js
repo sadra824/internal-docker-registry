@@ -11,14 +11,18 @@
  *       برای «ذخیره» صدا می‌زند) را no-op می‌کند — یعنی هیچ چیزی ذخیره
  *       نمی‌شود و کشی وجود ندارد.
  *
- *  ۲) EmptyBucket — شکلِ یک R2 bucket خالی برای جاهایی که روتر مستقیماً
+ *  ۲) emptyBucket — شکلِ یک R2 bucket خالی برای جاهایی که روتر مستقیماً
  *     env.REGISTRY را صدا می‌زند (HEAD blob ،فهرست تگ‌ها و …).
  *
  * نتیجه: رجیستریِ فقط-pull که هر درخواست را از upstream می‌گیرد و هیچ
- * داده‌ای نگه نمی‌دارد. push هم در سطح روتر ما با 501 رد می‌شود.
+ * داده‌ای نگه نمی‌دارد. push در سطح مسیر با 501 رد می‌شود؛ متدهای
+ * نوشتنی این کلاس فقط لایه‌ی اطمینان‌اند.
  */
 
-function errorResponse(status, code, message) {
+import { readOnlyUnsupported } from '../lib/http.js';
+
+/** خطای اینترفیس Registry — همان قرارداد {response} روتر serverless-registry */
+function registryError(status, code, message) {
     return {
         response: Response.json(
             { errors: [{ code, message }] },
@@ -27,7 +31,21 @@ function errorResponse(status, code, message) {
     };
 }
 
-/** دور انداختن امن استریم (تا شاخه‌ی tee بلا use بافر نگه ندارد) */
+function manifestUnknown() {
+    return registryError(404, 'MANIFEST_UNKNOWN', 'manifest unknown');
+}
+
+function blobUnknown() {
+    return registryError(404, 'BLOB_UNKNOWN', 'blob unknown to registry');
+}
+
+function unsupported() {
+    // readOnlyUnsupported() یک Response است؛ اینجا در قرارداد Registry می‌پیچیم
+    const response = readOnlyUnsupported();
+    return { response };
+}
+
+/** دور انداختن امن استریم (تا شاخه‌ی tee بلااستفاده بافر نگه ندارد) */
 async function discardStream(stream) {
     try {
         await stream.cancel();
@@ -37,14 +55,14 @@ async function discardStream(stream) {
 }
 
 export class NoCacheRegistry {
-    // ---------- خواندن‌ها: همیشه miss ----------
+    // ---------- خواندن‌ها: همیشه miss (مسیر fallback روتر) ----------
 
     async manifestExists() {
         return { exists: false };
     }
 
     async getManifest() {
-        return errorResponse(404, 'MANIFEST_UNKNOWN', 'manifest unknown');
+        return manifestUnknown();
     }
 
     async layerExists() {
@@ -52,7 +70,7 @@ export class NoCacheRegistry {
     }
 
     async getLayer() {
-        return errorResponse(404, 'BLOB_UNKNOWN', 'blob unknown to registry');
+        return blobUnknown();
     }
 
     async listRepositories() {
@@ -63,11 +81,14 @@ export class NoCacheRegistry {
         return { manifests: [] };
     }
 
-    // ---------- نوشتن‌ها: no-op (ذخیره‌ای وجود ندارد) ----------
+    // ---------- نوشتن‌های داخلی روتر (بعد از fallback): no-op ----------
 
     async putManifest(namespace, reference, stream) {
         await discardStream(stream);
-        return { digest: `sha256:${'0'.repeat(64)}`, location: `/${namespace}/manifests/${reference}` };
+        return {
+            digest: `sha256:${'0'.repeat(64)}`,
+            location: `/${namespace}/manifests/${reference}`
+        };
     }
 
     async monolithicUpload(_namespace, digest, stream) {
@@ -76,23 +97,21 @@ export class NoCacheRegistry {
     }
 
     // ---------- push: بدون ذخیره ممکن نیست ----------
-    // (این متدها در عمل توسط گیتِ فقط-خواندنیِ روترِ ما قبل از رسیدن به
-    // این‌جا با 501 رد می‌شوند؛ این پیاده‌سازی فقط برای اطمینان است.)
 
     async startUpload() {
-        return errorResponse(501, 'UNSUPPORTED', 'این رجیستری فقط از pull پشتیبانی می‌کند');
+        return unsupported();
     }
 
     async mountExistingLayer() {
-        return errorResponse(501, 'UNSUPPORTED', 'این رجیستری فقط از pull پشتیبانی می‌کند');
+        return unsupported();
     }
 
     async uploadChunk() {
-        return errorResponse(501, 'UNSUPPORTED', 'این رجیستری فقط از pull پشتیبانی می‌کند');
+        return unsupported();
     }
 
     async finishUpload() {
-        return errorResponse(501, 'UNSUPPORTED', 'این رجیستری فقط از pull پشتیبانی می‌کند');
+        return unsupported();
     }
 
     async cancelUpload() {
@@ -100,7 +119,7 @@ export class NoCacheRegistry {
     }
 
     async getUpload() {
-        return errorResponse(404, 'BLOB_UPLOAD_UNKNOWN', 'upload unknown');
+        return registryError(404, 'BLOB_UPLOAD_UNKNOWN', 'upload unknown');
     }
 
     async garbageCollection() {

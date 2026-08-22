@@ -19,6 +19,8 @@
  * (هدرها ارسال شده‌اند)؛ در این حالت کلاینت (wget -c) خودش retry می‌کند.
  */
 
+import { httpError } from '../lib/http.js';
+
 const FORWARDED_RESPONSE_HEADERS = [
     'Content-Type',
     'Content-Length',
@@ -28,6 +30,8 @@ const FORWARDED_RESPONSE_HEADERS = [
     'ETag',
     'Last-Modified'
 ];
+
+const PLATFORM_KEYS = ['os', 'arch', 'variant'];
 
 function looksLikeRegistryHost(ref) {
     // اول tag را جدا کن (بخش بعد از آخرین «:» که بعد از آخرین «/» است)
@@ -59,21 +63,13 @@ export function createPassthroughRouter({
         const name = (url.searchParams.get('name') || '').trim();
 
         if (!name) {
-            return Response.json(
-                {
-                    errors: [{
-                        code: 'BAD_REQUEST',
-                        message: 'پارامتر name الزامی است — مثال: ?name=nginx:latest'
-                    }]
-                },
-                { status: 400 }
-            );
+            return httpError(400, 'BAD_REQUEST', 'پارامتر name الزامی است — مثال: ?name=nginx:latest');
         }
 
         const kind = url.pathname.endsWith('/platforms') ? 'platforms' : 'image';
 
         const platform = {};
-        for (const key of ['os', 'arch', 'variant']) {
+        for (const key of PLATFORM_KEYS) {
             const value = url.searchParams.get(key);
             if (value) platform[key] = value;
         }
@@ -121,15 +117,10 @@ export function createPassthroughRouter({
             });
         }
 
-        return Response.json(
-            {
-                errors: [{
-                    code: 'UPSTREAM_UNAVAILABLE',
-                    message: `ایمیج "${name}" از هیچ‌کدام از رجیستری‌های پیکربندی دریافت نشد:\n`
-                        + failures.join('\n')
-                }]
-            },
-            { status: 502 }
+        return httpError(
+            502,
+            'UPSTREAM_UNAVAILABLE',
+            `ایمیج "${name}" از هیچ‌کدام از رجیستری‌های پیکربندی دریافت نشد:\n${failures.join('\n')}`
         );
     };
 }

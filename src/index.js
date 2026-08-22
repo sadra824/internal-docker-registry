@@ -1,98 +1,43 @@
 /**
- * نقطه‌ی ورود Worker — ترکیب سه بخش:
+ * نقطه‌ی ورود Worker — فقط «جدول مسیرها» و سیم‌کشی وابستگی‌ها.
  *
- *  ۱) /v2/…  → بک‌اند serverless-registry کلاودفلر (vendor شده، دست‌نخورده)
- *     در «حالت بدون ذخیره‌سازی»:
- *       - احراز هویت (USERNAME/PASSWORD یا JWT) — بدون credential پاسخ 401
- *       - هر pull از رجیستری‌های بالادستی (REGISTRIES_JSON) گرفته و
- *         مستقیم به کلاینت استریم می‌شود — هیچ داده‌ای در R2/کش ذخیره نمی‌شود
- *       - فقط pull؛ push (POST/PATCH/PUT/DELETE) با 501 رد می‌شود
- *
- *  ۲) /image و /platforms → دانلود مستقیم تاربال از سرویس منبع
- *     (استریم خالص، بدون ذخیره‌سازی — مناسب wget -c | docker load)
- *
- *  ۳) / → لندینگ پیج (Static Assets خود پلتفرم)
+ *  ۱) /v2/…        → routes/registry.js  (بک‌اند serverless-registry،
+ *                    بدون ذخیره‌سازی، بدون احراز هویت، فقط pull)
+ *  ۲) /image و /platforms → routes/passthrough.js (استریم مستقیم تاربال
+ *                    از سرویس منبع — مناسب wget -c | docker load)
+ *  ۳) بقیه          → لندینگ را Static Assets خود پلتفرم می‌دهد؛
+ *                    هر چیز دیگر 404
  */
 
 import v2Router from '../vendor/serverless-registry/src/router.ts';
 import { InternalError } from '../vendor/serverless-registry/src/errors.ts';
-import { NoCacheRegistry, emptyBucket } from './registry-nocache.js';
+import { createRegistryRoute } from './routes/registry.js';
 import { createPassthroughRouter } from './routes/passthrough.js';
+import { NoCacheRegistry, emptyBucket } from './registry/no-cache.js';
 import { getRegistries } from './services/registries.js';
+import { notFound, internalError } from './lib/http.js';
 
-function notFound() {
-    return Response.json(
-        { errors: [{ code: 'NOT_FOUND', message: 'مسیر یافت نشد' }] },
-        { status: 404 }
-    );
-}
+const PATHS = {
+    registryApi: '/v2',
+    image: '/image',
+    platforms: '/platforms'
+};
 
-/** فقط pull — همه‌ی عملیات نوشتن با 501 رد می‌شود (ذخیره‌ای وجود ندارد) */
-function readOnlyGate(method) {
-    if (method === 'GET' || method === 'HEAD') {
-        return null;
-    }
-    return Response.json(
-        {
-            errors: [{
-                code: 'UNSUPPORTED',
-                message: 'این رجیستری فقط از pull پشتیبانی می‌کند'
-            }]
-        },
-        { status: 501 }
-    );
-}
+// stateless هستند؛ یک بار در سطح isolate ساخته می‌شوند
+const registryRoute = createRegistryRoute({
+    v2Router,
+    registryClient: new NoCacheRegistry(),
+    bucket: emptyBucket,
+    InternalError
+});
 
-/**
- * نرمال‌سازی نام — دقیقاً مثل کاری که خود docker برای Docker Hub می‌کند:
- * نام‌های تک‌بخشی (مثل nginx) به library/nginx تبدیل می‌شوند؛ چون
- * رجیستری‌های Hub/Mirror بدون پیشوند library ایمیج رسمی را پیدا نمی‌کنند.
- * نام‌های دارای slash (مثل sadra824/img یا ghcr.io/owner/img) و مسیرهای
- * رزروشده با _ (مثل _catalog) دست‌نخورده می‌مانند.
- */
-function normalizeRequest(request) {
-    const url = new URL(request.url);
-    const path = url.pathname;
-
-    const match = path.match(/^(\/v2\/)([^/_][^/]*)((?:\/(?:manifests|blobs|tags)\/.+|\/tags\/list)?)$/);
-    if (!match) {
-        return request;
-    }
-
-    url.pathname = `${match[1]}library/${match[2]}${match[3]}`;
-    return new Request(url.toString(), request);
-}
-
-/** هندلر /v2 — بدون احراز هویت (pull ناشناس)، بدون ذخیره‌سازی، فقط pull */
-async function handleRegistry(request, env, ctx) {
-    const gate = readOnlyGate(request.method);
-    if (gate) {
-        return gate;
-    }
-
-    // قلب تغییر: به‌جای R2Registry، پیاده‌سازی بدون ذخیره + bucket خالی
-    env.REGISTRY = emptyBucket;
-    env.REGISTRY_CLIENT = new NoCacheRegistry();
-
-    try {
-        const res = await v2Router.fetch(normalizeRequest(request), env, ctx);
-        return res instanceof Response ? res : notFound();
-    } catch (err) {
-        if (err instanceof Response) {
-            console.warn(`${request.method} ${err.status} ${err.url}`);
-            return err;
-        }
-        console.error('router error:', err);
-        return new InternalError();
-    }
-}
-
-// مسیر دانلود مستقیم — بدون state، ساختنش در هر درخواست ارزان است
-function getPassthroughRouter(env) {
+/** سیم‌کشی env → وابستگی‌های مسیر دانلود مستقیم */
+function buildPassthroughRoute(env) {
     return createPassthroughRouter({
         getRegistries: () => getRegistries(env),
         sourceBaseUrl: env.SOURCE_BASE_URL,
-        // فقط Range برای ادامه‌ی دانلود (wget -c) پاس داده می‌شود
+        // فقط Range برای ادامه‌ی دانلود (wget -c) پاس داده می‌شود؛
+        // بدون signal تا استریم‌های طولانی وسط راه قطع نشوند
         fetchRaw: (target, request) => {
             const range = request.headers.get('Range');
             return fetch(target, {
@@ -105,24 +50,21 @@ function getPassthroughRouter(env) {
 
 export default {
     async fetch(request, env, ctx) {
-        const url = new URL(request.url);
+        const { pathname } = new URL(request.url);
 
-        if (url.pathname === '/v2' || url.pathname.startsWith('/v2/')) {
-            return handleRegistry(request, env, ctx);
+        if (pathname === PATHS.registryApi || pathname.startsWith(`${PATHS.registryApi}/`)) {
+            return registryRoute(request, env, ctx);
         }
 
-        if (url.pathname === '/image' || url.pathname === '/platforms') {
+        if (pathname === PATHS.image || pathname === PATHS.platforms) {
             try {
-                return await getPassthroughRouter(env)(request);
+                return await buildPassthroughRoute(env)(request);
             } catch (err) {
-                return Response.json(
-                    { errors: [{ code: 'INTERNAL_ERROR', message: 'خطای داخلی سرور' }] },
-                    { status: 500 }
-                );
+                console.error('passthrough error:', err);
+                return internalError();
             }
         }
 
-        // بقیه‌ی مسیرها: فایل‌های استاتیک (لندینگ) را خود پلتفرم می‌دهد
         return notFound();
     }
 };
