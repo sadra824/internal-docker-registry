@@ -13,21 +13,15 @@
         "directory": "./public"
     },
 
-    // ذخیره‌سازی رجیستری — R2 (پلن رایگان R2: ۱۰GB حجم + ۱M عملیات نوشتن در ماه)
-    // ساخت bucket:  npx wrangler r2 bucket create sadhanet-registry
-    "r2_buckets": [
-        {
-            "binding": "REGISTRY",
-            "bucket_name": "sadhanet-registry"
-        }
-    ],
+    // ⚠️ بدون R2 و بدون کش: هیچ بایندینگی به R2 وجود ندارد و هیچ داده‌ای
+    // ذخیره نمی‌شود. هر pull مستقیماً از رجیستری‌های بالادستی استریم می‌شود.
 
     // متغیرهای محیطی (env.X — نه process.env)
     "vars": {
         "SOURCE_BASE_URL": "https://dockerimagesave.akiel.dev/image",
 
-        // بک‌اند /v2 (serverless-registry) — رجیستری‌های fallback:
-        // اگر ایمیج در R2 نبود، به‌ترتیب از این‌ها گرفته و در R2 ذخیره می‌شود.
+        // بک‌اند /v2 (serverless-registry) — رجیستری‌های بالادستی:
+        // هر pull به‌ترتیب از این‌ها گرفته و مستقیم به کلاینت پاس داده می‌شود.
         // فرمت: [{ "registry": "<url>", "username"?: "...", "password_env"?: "..." }]
         // توکن/رمز را هرگز این‌جا ننویسید — با wrangler secret put تنظیم کنید.
         "REGISTRIES_JSON": "[{ \"registry\": \"https://docker.arvancloud.ir/\" }, { \"registry\": \"https://index.docker.io/\" }]"
